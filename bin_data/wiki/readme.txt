@@ -19,4 +19,6 @@ alphabets:
 
 	map the sequence indices to words
 	The vocabulary is only in lower case, to have a smaller overall vocabulary (among other reasons)
+	
+	key 0 for index 0 contains the empty word, thus we can use 0 to pad and when decrypting the sequences the padding words disappear
 
