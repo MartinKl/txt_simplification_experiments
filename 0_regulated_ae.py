@@ -30,24 +30,25 @@ with tf.variable_scope('encoder'):
     encoder = MultiRNNCell([LSTMCell(D), LSTMCell(D)])
 
 with tf.variable_scope('encode_n') as scope:
-    z_normal_arr = tf.TensorArray(dtype=tf.float32, size=LEN)
+    z_normal_arr = []
     z, state = encoder(embedded_n[:, 0], initial_encoder_state)
-    z_normal_arr.write(0, z)
+    z_normal_arr.append(z)
 with tf.variable_scope(scope, reuse=True):
     for i in range(1, LEN):
         z, state = encoder(embedded_n[:, i], state)
-        z_normal_arr.write(i, z)
+        z_normal_arr.append(z)
 
 with tf.variable_scope('encode_s') as scope:
-    z_simple_arr = tf.TensorArray(dtype=tf.float32, size=LEN)
+    z_simple_arr = []
     z, state = encoder(embedded_s[:, 0], initial_encoder_state)
-    z_simple_arr.write(0, z)
+    z_simple_arr.append(z)
 with tf.variable_scope(scope, reuse=True):
     for i in range(1, LEN):
         z, state = encoder(embedded_s[:, i], state)
-        z_simple_arr.write(i, z)
+        z_simple_arr.append(z)
 
-exit()
+z_normal = tf.reduce_mean(z_normal_arr, axis=0)
+z_simple = tf.reduce_mean(z_simple_arr, axis=0)
 
 initial_decoder_state = [
     LSTMStateTuple(tf.zeros((BS, D,), dtype=tf.float32), tf.zeros((BS, D,), dtype=tf.float32)),
