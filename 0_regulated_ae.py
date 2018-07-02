@@ -6,6 +6,7 @@ import numpy as np
 import os
 
 V = 1000
+EMB_D = 64
 LR = .1
 CLIP_NORM = 5.
 BS = 1
@@ -19,6 +20,12 @@ initial_encoder_state = [
     (tf.zeros((BS, 96,), dtype=np.float32), tf.zeros((BS, 96,), dtype=np.float32)),
     (tf.zeros((BS, 96,), dtype=np.float32), tf.zeros((BS, 96,), dtype=np.float32))
 ]
+
+with tf.variable_scope('embedding') as scope:
+    embedding_n = tf.contrib.layers.embed_sequence(x_normal, vocab_size=V, embed_dim=EMB_D)
+    print('1:', tf.global_variables())
+    embedding_s = tf.contrib.layers.embed_sequence(x_simple, vocab_size=V, embed_dim=EMB_D, reuse=True, scope=scope)
+    print('2:', tf.global_variables())
 
 with tf.variable_scope('encoder'):
     encoder = MultiRNNCell([LSTMCell(96), LSTMCell(96)])
