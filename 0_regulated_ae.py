@@ -61,8 +61,8 @@ with tf.variable_scope('reduction_layer/pool') as scope:
     z_normal = max_pool2d(tf.transpose(z_normal[None], (0, 1, 3, 2)), kernel_size=(1, LEN // 4), stride=1)
     z_simple = max_pool2d(tf.transpose(z_simple[None], (0, 1, 3, 2)), kernel_size=(1, LEN // 4), stride=1)
 with tf.variable_scope('reduction/reshape'):
-    z_normal = tf.reshape(z_normal, (1, D))
-    z_simple = tf.reshape(z_simple, (1, D))
+    z_normal = tf.reshape(z_normal, (BS, D))
+    z_simple = tf.reshape(z_simple, (BS, D))
 
 initial_decoder_state = [
     LSTMStateTuple(tf.zeros((BS, D,), dtype=tf.float32), tf.zeros((BS, D,), dtype=tf.float32)),
