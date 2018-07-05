@@ -1,20 +1,21 @@
-from functools import partial
 import tensorflow as tf
 from tensorflow.contrib.layers import conv2d, max_pool2d
 from tensorflow.contrib.rnn import MultiRNNCell, LSTMCell, LSTMStateTuple
 from tensorflow.contrib.seq2seq import sequence_loss
 import numpy as np
 import os
+import pickle
 
 V = 1000
 EMB_D = 64
 D = 96
 LR = .1
 CLIP_NORM = 5.
-BS = 1
-LEN = 40
+BS = 32
+LEN = 33
 
-
+# model definition
+print('building model ...')
 x_normal = tf.placeholder(tf.int32, shape=(None, LEN,), name='normal')
 x_simple = tf.placeholder(tf.int32, shape=(None, LEN,), name='simple')
 
@@ -105,6 +106,14 @@ optimizer = tf.train.GradientDescentOptimizer(learning_rate=LR)
 gradients = tf.gradients(err, params)
 clipped_gradients, _ = tf.clip_by_global_norm(gradients, clip_norm=CLIP_NORM)
 update = optimizer.apply_gradients(grads_and_vars=zip(clipped_gradients, params))
+
+# load data
+print('loading data ...')
+with open('bin_data/uniwiki/data_reduced.bin', 'rb') as f:
+    data = pickle.load(f)
+
+print(*[var.name for var in tf.global_variables()])
+exit()
 
 # training
 with tf.Session() as session:
