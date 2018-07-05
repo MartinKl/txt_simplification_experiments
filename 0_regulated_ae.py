@@ -1,5 +1,6 @@
 from functools import partial
 import tensorflow as tf
+from tensorflow.contrib.layers import conv2d, max_pool2d
 from tensorflow.contrib.rnn import MultiRNNCell, LSTMCell, LSTMStateTuple
 from tensorflow.contrib.seq2seq import sequence_loss
 import numpy as np
@@ -47,8 +48,20 @@ with tf.variable_scope(scope, reuse=True):
         z, state = encoder(embedded_s[:, i], state)
         z_simple_arr.append(z)
 
-z_normal = tf.reduce_mean(z_normal_arr, axis=0)
-z_simple = tf.reduce_mean(z_simple_arr, axis=0)
+z_n = tf.transpose(tf.convert_to_tensor(z_normal_arr))
+z_s = tf.transpose(tf.convert_to_tensor(z_simple_arr))
+with tf.variable_scope('reduction_layer/0') as scope:
+    z_normal = conv2d(z_n, LEN // 2, (32,))
+    z_simple = conv2d(z_s, LEN // 2, (32,), reuse=True, scope=scope)
+with tf.variable_scope('reduction_layer/1') as scope:
+    z_normal = conv2d(z_normal, LEN // 4, (32,))
+    z_simple = conv2d(z_simple, LEN // 4, (32,), reuse=True, scope=scope)
+with tf.variable_scope('reduction_layer/pool') as scope:
+    z_normal = max_pool2d(tf.transpose(z_normal[None], (0, 1, 3, 2)), kernel_size=(1, LEN // 4), stride=1)
+    z_simple = max_pool2d(tf.transpose(z_simple[None], (0, 1, 3, 2)), kernel_size=(1, LEN // 4), stride=1)
+with tf.variable_scope('reduction/reshape'):
+    z_normal = tf.reshape(z_normal, (1, D))
+    z_simple = tf.reshape(z_simple, (1, D))
 
 initial_decoder_state = [
     LSTMStateTuple(tf.zeros((BS, D,), dtype=tf.float32), tf.zeros((BS, D,), dtype=tf.float32)),
@@ -92,3 +105,14 @@ optimizer = tf.train.GradientDescentOptimizer(learning_rate=LR)
 gradients = tf.gradients(err, params)
 clipped_gradients, _ = tf.clip_by_global_norm(gradients, clip_norm=CLIP_NORM)
 update = optimizer.apply_gradients(grads_and_vars=zip(clipped_gradients, params))
+
+# training
+with tf.Session() as session:
+    print('Inititalizing ...')
+    session.run(tf.global_variables_initializer())
+    result = session.run(update, feed_dict={
+        'normal:0': [[1] * (LEN - 1) + [0]],
+        'simple:0': [[1] * (LEN - 1) + [0]]
+    })
+    print('Result:')
+    print(result)

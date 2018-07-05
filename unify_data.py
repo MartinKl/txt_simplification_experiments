@@ -11,4 +11,4 @@ with open(os.path.join(source_dir, 'simple_dict.bin'), 'rb') as f:
     simple_d = pickle.load(f)
 data = np.load(os.path.join(source_dir, 'paired_array_normal_simple.npy'))
 
-common_d =
+common_d = {0: ''}
