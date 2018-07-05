@@ -1,3 +1,4 @@
+import gc
 import tensorflow as tf
 from tensorflow.contrib.layers import conv2d, max_pool2d
 from tensorflow.contrib.rnn import MultiRNNCell, LSTMCell, LSTMStateTuple
@@ -6,7 +7,10 @@ import numpy as np
 import os
 import pickle
 
-V = 1000
+with open('bin_data/uniwiki/dict_reduced.bin', 'rb') as f:
+    vocab = pickle.load(f)
+eos_ix = len(vocab)
+v = len(vocab) + 1
 EMB_D = 64
 D = 96
 LR = .1
@@ -17,7 +21,9 @@ LEN = 33
 # model definition
 print('building model ...')
 x_normal = tf.placeholder(tf.int32, shape=(None, LEN,), name='normal')
+w_normal = tf.placeholder(tf.int32, shape=(None, LEN,), name='nweights')
 x_simple = tf.placeholder(tf.int32, shape=(None, LEN,), name='simple')
+w_simple = tf.placeholder(tf.int32, shape=(None, LEN,), name='sweights')
 
 initial_encoder_state = [
     LSTMStateTuple(tf.zeros((BS, D,), dtype=tf.float32), tf.zeros((BS, D,), dtype=tf.float32)),
@@ -25,7 +31,7 @@ initial_encoder_state = [
 ]
 
 with tf.variable_scope('embedding') as scope:
-    embedded_n = tf.contrib.layers.embed_sequence(x_normal, vocab_size=V, embed_dim=EMB_D, scope=scope)
+    embedded_n = tf.contrib.layers.embed_sequence(x_normal, vocab_size=v, embed_dim=EMB_D, scope=scope)
     embedded_s = tf.contrib.layers.embed_sequence(x_simple, reuse=True, scope=scope)
 
 with tf.variable_scope('encoder'):
@@ -67,11 +73,11 @@ with tf.variable_scope('reduction/reshape'):
 initial_decoder_state = [
     LSTMStateTuple(tf.zeros((BS, D,), dtype=tf.float32), tf.zeros((BS, D,), dtype=tf.float32)),
     LSTMStateTuple(tf.zeros((BS, D,), dtype=tf.float32), tf.zeros((BS, D,), dtype=tf.float32)),
-    LSTMStateTuple(tf.zeros((BS, V,), dtype=tf.float32), tf.zeros((BS, V,), dtype=tf.float32))
+    LSTMStateTuple(tf.zeros((BS, v,), dtype=tf.float32), tf.zeros((BS, v,), dtype=tf.float32))
 ]
 
 with tf.variable_scope('decode_n') as scope:
-    decoder_n = MultiRNNCell([LSTMCell(D), LSTMCell(D), LSTMCell(V)])
+    decoder_n = MultiRNNCell([LSTMCell(D), LSTMCell(D), LSTMCell(v)])
     state = initial_decoder_state
     logits_normal = []
     logits, state = decoder_n(z_normal, state)
@@ -82,10 +88,10 @@ with tf.variable_scope(scope, reuse=True):
         logits_normal.append(logits)
     err_r_normal = sequence_loss(logits=tf.convert_to_tensor(logits_normal),
                                  targets=x_normal,
-                                 weights=tf.ones_like(x_normal, dtype=tf.float32))
+                                 weights=w_normal)
 
 with tf.variable_scope('decode_s') as scope:
-    decoder_s = MultiRNNCell([LSTMCell(D), LSTMCell(D), LSTMCell(V)])
+    decoder_s = MultiRNNCell([LSTMCell(D), LSTMCell(D), LSTMCell(v)])
     state = initial_decoder_state
     logits_simple = []
     logits, state = decoder_s(z_simple, state)
@@ -96,7 +102,7 @@ with tf.variable_scope(scope, reuse=True):
         logits_simple.append(logits)
     err_r_simple = sequence_loss(logits=tf.convert_to_tensor(logits_simple),
                                  targets=x_simple,
-                                 weights=tf.ones_like(x_simple, dtype=tf.float32))
+                                 weights=w_simple)
 
 err_z = tf.reduce_sum(tf.squared_difference(z_simple, z_normal), name='repr_error')
 err = err_r_normal + err_r_simple + err_z
@@ -111,17 +117,38 @@ update = optimizer.apply_gradients(grads_and_vars=zip(clipped_gradients, params)
 print('loading data ...')
 with open('bin_data/uniwiki/data_reduced.bin', 'rb') as f:
     data = pickle.load(f)
-
-print(*[var.name for var in tf.global_variables()])
-exit()
-
+normal = []
+normal_w = []
+simple = []
+simple_w = []
+for example_n, example_s in zip(data['normal'], data['simple']):
+    normal.append(np.array(example_n + [eos_ix] + [0] * (LEN - len(example_n) - 1)))
+    normal_w.append(np.array(normal[-1] > 0).astype(np.int32))
+    simple.append(np.array(example_s + [eos_ix] + [0] * (LEN - len(example_s) - 1)))
+    simple_w.append(np.array(simple[-1] > 0).astype(np.int32))
+normal = np.array(normal)
+simple = np.array(simple)
+normal_w = np.array(normal_w)
+simple_w = np.array(simple_w)
+data = None
+gc.collect()
 # training
 with tf.Session() as session:
     print('Inititalizing ...')
     session.run(tf.global_variables_initializer())
-    result = session.run(update, feed_dict={
-        'normal:0': [[1] * (LEN - 1) + [0]],
-        'simple:0': [[1] * (LEN - 1) + [0]]
-    })
-    print('Result:')
-    print(result)
+    print('Starting training ...')
+    epoch = 0
+    step = 0
+    while True:
+        epoch += 1
+        print('Starting epoch', epoch, '...')
+        for batch_index in range(0, normal.shape[0], BS):
+            if not batch_index / BS % 5:
+                print('Feeding batch', batch_index / BS)
+            result = session.run(update, feed_dict={
+                'normal:{}'.format(step): normal[batch_index:batch_index + BS],
+                'simple:{}'.format(step): simple[batch_index:batch_index + BS],
+                'nweights:{}'.format(step): normal_w[batch_index:batch_index + BS],
+                'sweights:{}'.format(step): simple_w[batch_index:batch_index + BS]
+            })
+            step += 1
