@@ -16,14 +16,14 @@ D = 96
 LR = .1
 CLIP_NORM = 5.
 BS = 32
-LEN = 33
+LEN = 34
 
 # model definition
 print('building model ...')
 x_normal = tf.placeholder(tf.int32, shape=(None, LEN,), name='normal')
-w_normal = tf.placeholder(tf.int32, shape=(None, LEN,), name='nweights')
+w_normal = tf.placeholder(tf.float32, shape=(None, LEN,), name='nweights')
 x_simple = tf.placeholder(tf.int32, shape=(None, LEN,), name='simple')
-w_simple = tf.placeholder(tf.int32, shape=(None, LEN,), name='sweights')
+w_simple = tf.placeholder(tf.float32, shape=(None, LEN,), name='sweights')
 
 initial_encoder_state = [
     LSTMStateTuple(tf.zeros((BS, D,), dtype=tf.float32), tf.zeros((BS, D,), dtype=tf.float32)),
@@ -123,13 +123,13 @@ simple = []
 simple_w = []
 for example_n, example_s in zip(data['normal'], data['simple']):
     normal.append(np.array(example_n + [eos_ix] + [0] * (LEN - len(example_n) - 1)))
-    normal_w.append(np.array(normal[-1] > 0).astype(np.int32))
+    normal_w.append(np.array(normal[-1] > 0).astype(np.float32))
     simple.append(np.array(example_s + [eos_ix] + [0] * (LEN - len(example_s) - 1)))
-    simple_w.append(np.array(simple[-1] > 0).astype(np.int32))
-normal = np.array(normal)
-simple = np.array(simple)
-normal_w = np.array(normal_w)
-simple_w = np.array(simple_w)
+    simple_w.append(np.array(simple[-1] > 0).astype(np.float32))
+normal = np.array(normal, dtype=np.int32)
+simple = np.array(simple, dtype=np.int32)
+normal_w = np.array(normal_w, dtype=np.float32)
+simple_w = np.array(simple_w, dtype=np.float32)
 data = None
 gc.collect()
 # training
@@ -144,7 +144,7 @@ with tf.Session() as session:
         print('Starting epoch', epoch, '...')
         for batch_index in range(0, normal.shape[0], BS):
             if not batch_index / BS % 5:
-                print('Feeding batch', batch_index / BS)
+                print('Feeding batch', 1 + batch_index // BS)
             result = session.run(update, feed_dict={
                 'normal:{}'.format(step): normal[batch_index:batch_index + BS],
                 'simple:{}'.format(step): simple[batch_index:batch_index + BS],
