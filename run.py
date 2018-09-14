@@ -1,5 +1,4 @@
 from argparse import ArgumentParser
-import gc
 import tensorflow as tf
 from tensorflow.contrib.layers import conv2d, fully_connected, max_pool2d, softmax, stack
 from tensorflow.contrib.rnn import MultiRNNCell, LSTMCell, LSTMStateTuple
@@ -29,6 +28,9 @@ with open('bin_data/uniwiki/dict_reduced.bin', 'rb') as f:
     vocab = pickle.load(f)
 eos_ix = len(vocab)
 v = len(vocab) + 1
+## DEBUG
+v = 10
+## END OF DEBUG
 
 # model definition
 print('building model ...')
@@ -122,6 +124,8 @@ with tf.variable_scope(scope, reuse=True):
                                                w_simple))
 
 update = tf.no_op('idle')
+losses = []
+loss_labels = []
 print('training loss ...')
 if r == AE:
     print('.building direct representation loss ...')
@@ -133,6 +137,8 @@ if r == AE:
     gradients = tf.gradients(err, params)
     clipped_gradients, _ = tf.clip_by_global_norm(gradients, clip_norm=CLIP_NORM)
     update = optimizer.apply_gradients(grads_and_vars=zip(clipped_gradients, params), global_step=global_step)
+    losses.extend([err, err_r, err_z])
+    loss_labels.extend(['Overall error', 'reconstruction error', 'representation error'])
 elif r == VAE:
     print('.building vae loss ...')
     err = tf.constant(0)
@@ -153,10 +159,10 @@ elif r == DSC1:
                                          stack_args=d_dims,
                                          scope=scope.name,
                                          reuse=True))
-        confusion_normal = 1 - normal_is_normal
+        confusion_normal = 1. - normal_is_normal
         confusion_simple = simple_is_normal
         d_loss = confusion_normal + confusion_simple
-        g_loss = (1 - confusion_normal) + (1 - confusion_simple)
+        g_loss = (1. - confusion_normal) + (1. - confusion_simple)
         # optimize discriminator
         discriminator_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='discriminator')
         optimizer = tf.train.GradientDescentOptimizer(LR)
@@ -171,6 +177,8 @@ elif r == DSC1:
         gr_update = optimizer.apply_gradients(grads_and_vars=zip(g_clipped_gradients, gr_params))
         # define complete update
         update = tf.group(d_update, gr_update)
+        losses.extend([d_loss, g_loss])
+        loss_labels.extend(['discriminator loss', 'generator loss'])
 elif r == DSC2:
     print('.building dual discriminator loss ...')
     with tf.variable_scope('discriminators/n'):
@@ -182,13 +190,17 @@ elif r == DSC2:
 
 # load data
 print('loading data ...')
-normal = np.load('bin_data/uniwiki34/normal.npy')
+normal = np.load('bin_data/uniwiki34/normal.npy').clip(max=v-1)
 normal_w = np.load('bin_data/uniwiki34/w_normal.npy')
-simple = np.load('bin_data/uniwiki34/simple.npy')
+simple = np.load('bin_data/uniwiki34/simple.npy').clip(max=v-1)
 simple_w = np.load('bin_data/uniwiki34/w_simple.npy')
 
+train_set = (0, int(.8 * normal.shape[0]))
+valid_set = (train_set[1] + 1, int(.9 * normal.shape[0]))
+
 # training
-with tf.Session() as session:
+config = None
+with tf.Session(config=config) as session:
     print('Inititalizing ...')
     session.run(tf.global_variables_initializer())
     saver = tf.train.Saver(var_list=tf.global_variables())
@@ -197,17 +209,42 @@ with tf.Session() as session:
     if not os.path.exists(train_dir):
         os.mkdir(train_dir)
     epoch = 0
-    if False:
+    if True:
         while True:
             print('Saving ...')
             saver.save(session, train_dir)
             epoch += 1
             print('Starting epoch', epoch, '...')
-            for batch_index in range(0, normal.shape[0], BS):
-                if not batch_index / BS % 5:
-                    print('Feeding batch', 1 + batch_index // BS)
-                feed_error = session.run(update,
-                                         feed_dict={'normal:0': normal[batch_index:batch_index + BS],
-                                                    'simple:0': simple[batch_index:batch_index + BS],
-                                                    'nweights:0': normal_w[batch_index:batch_index + BS],
-                                                    'sweights:0': simple_w[batch_index:batch_index + BS]})
+            train_error = np.array([1.] * len(losses))
+            step = 0
+            for batch_index in range(*train_set, BS):
+                *loss_values, _ = session.run(losses + [update],
+                                              feed_dict={'normal:0': normal[batch_index:batch_index + BS],
+                                                         'simple:0': simple[batch_index:batch_index + BS],
+                                                         'nweights:0': normal_w[batch_index:batch_index + BS],
+                                                         'sweights:0': simple_w[batch_index:batch_index + BS]})
+                train_error *= np.array(loss_values)
+                step += 1
+                # DEBUG
+                if step == 200:
+                    break
+                ## END OF DEBUG
+            print('Current train. loss:',
+                  *[': '.join((name, str(value))) for name, value in zip(loss_labels, train_error ** (1 / step))],
+                  sep='\t')
+            # validation part
+            valid_step = 0
+            valid_error = np.array([1.] * len(losses))
+            for batch_index in range(*valid_set, BS):
+                loss_values = session.run(losses,
+                                          feed_dict={'normal:0': normal[batch_index:batch_index + BS],
+                                                     'simple:0': simple[batch_index:batch_index + BS],
+                                                     'nweights:0': normal_w[batch_index:batch_index + BS],
+                                                     'sweights:0': simple_w[batch_index:batch_index + BS]})
+                valid_error *= np.array(loss_values)
+                valid_step += 1
+                if valid_step == 200:
+                    break
+            print('Current valid. loss:',
+                  *[': '.join((name, str(value))) for name, value in zip(loss_labels, valid_error ** (1 / valid_step))],
+                  sep='\t')
