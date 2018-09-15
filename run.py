@@ -215,7 +215,7 @@ train_set = (0, int(.8 * normal.shape[0]))
 valid_set = (train_set[1] + 1, int(.9 * normal.shape[0]))
 
 # training
-config = None
+config = tf.ConfigProto(gpu_options=tf.GPUOptions(allow_growth=True))
 with tf.Session(config=config) as session:
     print('Inititalizing ...')
     session.run(tf.global_variables_initializer())
