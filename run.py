@@ -24,12 +24,14 @@ LR = .1
 CLIP_NORM = 5.
 BS = 1
 LEN = 34
+PRE_TRAIN_ADVANTAGE = 600
+
 with open('bin_data/uniwiki/dict_reduced.bin', 'rb') as f:
     vocab = pickle.load(f)
 eos_ix = len(vocab)
 v = len(vocab) + 1
 ## DEBUG
-v = 10
+#v = 10
 ## END OF DEBUG
 
 # model definition
@@ -123,7 +125,14 @@ with tf.variable_scope(scope, reuse=True):
                                                x_simple,
                                                w_simple))
 
-update = tf.no_op('idle')
+idle = tf.no_op('idle')
+update = idle
+d_update = idle
+d_loss = idle
+g_update = idle
+g_loss = idle
+r_update = idle
+r_loss = idle
 losses = []
 loss_labels = []
 print('training loss ...')
@@ -150,35 +159,42 @@ elif r == DSC1:
         # the discriminator's output probability is chosen as probability that the input was a normal, i. e. complex
         # expression. Thus, the probability can also be interpreted as complexity score with higher values expressing
         # a higher level of complexity
-        normal_is_normal = softmax(stack(z_normal,
+        normal_is_normal = tf.sigmoid(stack(z_normal,
                                          layer=fully_connected,
                                          stack_args=d_dims,
                                          scope=scope.name))
-        simple_is_normal = softmax(stack(z_simple,
+        simple_is_normal = tf.sigmoid(stack(z_simple,
                                          layer=fully_connected,
                                          stack_args=d_dims,
                                          scope=scope.name,
                                          reuse=True))
         confusion_normal = 1. - normal_is_normal
         confusion_simple = simple_is_normal
-        d_loss = confusion_normal + confusion_simple
-        g_loss = (1. - confusion_normal) + (1. - confusion_simple)
+        d_loss = confusion_normal #+ confusion_simple
+        g_loss = 2. - confusion_normal - confusion_simple
         # optimize discriminator
         discriminator_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='discriminator')
         optimizer = tf.train.GradientDescentOptimizer(LR)
         d_gradients = tf.gradients(d_loss, discriminator_params)
         d_clipped_gradients, _ = tf.clip_by_global_norm(d_gradients, clip_norm=CLIP_NORM)
         d_update = optimizer.apply_gradients(grads_and_vars=zip(d_clipped_gradients, discriminator_params))
-        # optimize remaining network
-        g_err = err_r_simple + err_r_normal + g_loss
-        gr_params = list(set(tf.global_variables()).difference(discriminator_params))
-        g_gradients = tf.gradients(g_err, gr_params)
+        # optimize encoder network
+        g_params = list(set(tf.global_variables()).difference(discriminator_params))
+        g_gradients = tf.gradients(g_loss, g_params)
         g_clipped_gradients, _ = tf.clip_by_global_norm(g_gradients, clip_norm=CLIP_NORM)
-        gr_update = optimizer.apply_gradients(grads_and_vars=zip(g_clipped_gradients, gr_params))
-        # define complete update
-        update = tf.group(d_update, gr_update)
-        losses.extend([d_loss, g_loss])
-        loss_labels.extend(['discriminator loss', 'generator loss'])
+        g_update = optimizer.apply_gradients(grads_and_vars=zip(g_clipped_gradients, g_params))
+        # optimize reconstruction function as well
+        r_loss = err_r_simple + err_r_normal
+        r_params = tf.global_variables()
+        r_gradients = tf.gradients(r_loss, r_params)
+        r_clipped_gradients, _ = tf.clip_by_global_norm(r_gradients, clip_norm=CLIP_NORM)
+        r_update = optimizer.apply_gradients(grads_and_vars=zip(r_clipped_gradients, r_params))
+        losses.extend([r_loss,
+                       g_loss,
+                       d_loss])
+        loss_labels.extend(['Reconstruction error',
+                            'Generator loss',
+                            'Discriminator loss'])
 elif r == DSC2:
     print('.building dual discriminator loss ...')
     with tf.variable_scope('discriminators/n'):
@@ -209,8 +225,31 @@ with tf.Session(config=config) as session:
     if not os.path.exists(train_dir):
         os.mkdir(train_dir)
     epoch = 0
-    if True:
-        while True:
+    if r == DSC1:
+        # discriminator pre-training
+        print('Pretraining encoding and reconstruction')
+        for index in range(PRE_TRAIN_ADVANTAGE):
+            r_loss_val = session.run([r_loss, r_update], feed_dict={'normal:0': normal[index:index + 1],
+                                               'simple:0': simple[index:index + 1],
+                                               'nweights:0': normal_w[index:index + 1],
+                                               'sweights:0': simple_w[index:index + 1]})
+            print('r loss in pre-tr.', r_loss_val)
+        print('Pretraining discriminator with', PRE_TRAIN_ADVANTAGE, 'examples ...')
+        pre_train_step = 0
+        pre_train_loss = np.array([1., 1.])
+        for index in range(100 * PRE_TRAIN_ADVANTAGE):
+            *loss_value, _ = session.run([d_loss, g_loss, d_update],
+                                         feed_dict={'normal:0': normal[index:index + 1],
+                                                    'simple:0': simple[index:index + 1],
+                                                    'nweights:0': normal_w[index:index + 1],
+                                                    'sweights:0': simple_w[index:index + 1]})
+            if not index % 100:
+                print('d_loss:', loss_value[0], 'g_loss:', loss_value[1])
+            #pre_train_step += 1
+            #pre_train_loss *= np.array(loss_value).flatten()
+        print('Discriminator loss after pre-training:', pre_train_loss ** (1 / pre_train_step))
+    while True:
+        if r == AE:
             print('Saving ...')
             saver.save(session, train_dir)
             epoch += 1
@@ -223,11 +262,9 @@ with tf.Session(config=config) as session:
                                                          'simple:0': simple[batch_index:batch_index + BS],
                                                          'nweights:0': normal_w[batch_index:batch_index + BS],
                                                          'sweights:0': simple_w[batch_index:batch_index + BS]})
-                train_error *= np.array(loss_values)
+                train_error *= np.array(loss_values).flatten()
                 step += 1
                 # DEBUG
-                if step == 200:
-                    break
                 ## END OF DEBUG
             print('Current train. loss:',
                   *[': '.join((name, str(value))) for name, value in zip(loss_labels, train_error ** (1 / step))],
@@ -241,10 +278,42 @@ with tf.Session(config=config) as session:
                                                      'simple:0': simple[batch_index:batch_index + BS],
                                                      'nweights:0': normal_w[batch_index:batch_index + BS],
                                                      'sweights:0': simple_w[batch_index:batch_index + BS]})
-                valid_error *= np.array(loss_values)
+                valid_error *= np.array(loss_values).flatten()
                 valid_step += 1
-                if valid_step == 200:
-                    break
+            print('Current valid. loss:',
+                  *[': '.join((name, str(value))) for name, value in zip(loss_labels, valid_error ** (1 / valid_step))],
+                  sep='\t')
+        elif r == DSC1:
+            print('Saving ...')
+            saver.save(session, train_dir)
+            epoch += 1
+            print('Starting epoch', epoch, '...')
+            train_error = np.array([1.] * 3)
+            step = 0
+            for batch_index in range(*train_set, BS):
+                base_feed = {'normal:0': normal[batch_index:batch_index + BS],
+                             'simple:0': simple[batch_index:batch_index + BS],
+                             'nweights:0': normal_w[batch_index:batch_index + BS],
+                             'sweights:0': simple_w[batch_index:batch_index + BS]}
+                g_loss_value, _ = session.run([g_loss, g_update], feed_dict=base_feed)
+                d_loss_value, _ = session.run([d_loss, d_update], feed_dict=base_feed)
+                r_loss_val, _ = session.run([r_loss, r_update], feed_dict=base_feed)
+                train_error *= np.array([g_loss_value, d_loss_value, r_loss_val]).flatten()
+                step += 1
+            print('Current train. loss:',
+                  *[': '.join((name, str(value))) for name, value in zip(loss_labels, train_error ** (1 / step))],
+                  sep='\t')
+            # validation part
+            valid_step = 0
+            valid_error = np.array([1.] * len(losses))
+            for batch_index in range(*valid_set, BS):
+                loss_values = session.run(losses,
+                                          feed_dict={'normal:0': normal[batch_index:batch_index + BS],
+                                                     'simple:0': simple[batch_index:batch_index + BS],
+                                                     'nweights:0': normal_w[batch_index:batch_index + BS],
+                                                     'sweights:0': simple_w[batch_index:batch_index + BS]})
+                valid_error *= np.array(loss_values).flatten()
+                valid_step += 1
             print('Current valid. loss:',
                   *[': '.join((name, str(value))) for name, value in zip(loss_labels, valid_error ** (1 / valid_step))],
                   sep='\t')
