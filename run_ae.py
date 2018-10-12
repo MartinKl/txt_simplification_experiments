@@ -1,3 +1,4 @@
+from lib.data import DataCollection
 from lib.model import AE, ModelParameters, TrainingParameters
 import numpy as np
 import os
@@ -15,6 +16,11 @@ model_params = ModelParameters(sequence_length=normal.shape[1],
                                embedding_dim=16,
                                hidden_dim=64)
 training_params = TrainingParameters('test_new_model_delete_please')
-
-with AE(model_params, training_params) as model:
-    print('huhu')
+data = DataCollection(normal, simple, normal_w, simple_w)
+with AE(training_params=training_params, model_params=model_params) as model:
+    model.loop(training_data=data['train'],
+               validation_data=data['valid'],
+               report_every=400,
+               log_every=100,
+               continue_callback=lambda m: m.age < 100,
+               callback_args=[model])

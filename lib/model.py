@@ -295,7 +295,12 @@ class AE(SequenceModel):
                 self.save()
         logger.info('Finished training after {} epochs'.format(self._epoch.eval(session=self._session)))
 
-    def _consume(self, data, forward_only=False, steps=None, report_every=1000, log_every=100, **kwargs):
+    def _consume(self,
+                 data,
+                 forward_only=False,
+                 steps=None,
+                 report_every=1000,
+                 log_every=100, save_every=10000, **kwargs):
         max_i = sys.maxsize if steps is None else steps
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug('Starting data consumption ...')
@@ -321,6 +326,8 @@ class AE(SequenceModel):
                         .format(batch_index, 'VALID' if forward_only else 'TRAIN', error ** (1 / report_every), error)
                 )
                 error = 1.
+            if self._auto_save and batch_index and not batch_index % save_every:
+                self.save()
             if batch_index >= max_i:
                 break
         logger.info('Epoch finished')
