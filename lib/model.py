@@ -209,10 +209,10 @@ class AE(SequenceModel):
         z_s = tf.transpose(tf.convert_to_tensor(z_simple_arr))
         with tf.variable_scope('reduction/0') as scope:
             z_normal = conv2d(z_n, self._model_params.n // 2, (32,))
-            z_simple = conv2d(z_s, self._model_params.n // 2, (32,), reuse=True, scope=scope)
+            z_simple = conv2d(z_s, self._model_params.n // 2, (32,), reuse=tf.AUTO_REUSE, scope=scope)
         with tf.variable_scope('reduction/1') as scope:
             z_normal = conv2d(z_normal, self._model_params.n // 4, (32,))
-            z_simple = conv2d(z_simple, self._model_params.n // 4, (32,), reuse=True, scope=scope)
+            z_simple = conv2d(z_simple, self._model_params.n // 4, (32,), reuse=tf.AUTO_REUSE, scope=scope)
         with tf.variable_scope('reduction/pool'):
             z_normal = max_pool2d(tf.transpose(z_normal[None], (0, 1, 3, 2)),
                                   kernel_size=(1, self._model_params.n // 4),
