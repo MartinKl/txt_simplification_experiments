@@ -31,7 +31,7 @@ with open('bin_data/uniwiki/dict_reduced.bin', 'rb') as f:
 eos_ix = len(vocab)
 v = len(vocab) + 1
 ## DEBUG
-#v = 10
+v = 10
 ## END OF DEBUG
 
 # model definition
