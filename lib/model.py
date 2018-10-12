@@ -138,6 +138,10 @@ class SequenceModel(object):
     def active(self):
         return self._active
 
+    @property
+    def age(self):
+        return self._epoch.eval(session=self._session)
+
     def __enter__(self):
         config = tf.ConfigProto(gpu_options=tf.GPUOptions(allow_growth=True))
         self._session = tf.Session(config=config)

@@ -31,7 +31,7 @@ test = 'TRAIN'
 try:
     logger.info('Training test ...')
     with AE(model_params, training_params) as model:
-        model.loop(data['train'], data['valid'], steps=1, continue_callback=lambda: False)
+        model.loop(data['train'], data['valid'], steps=1, continue_callback=lambda m: m.age < 3, callback_args=[model])
         logger.info('Training and validation test successful!')
         model.save()
         logger.info('Saving successful!')
@@ -40,6 +40,7 @@ try:
     with AE(model_params, training_params) as model:
         model.load(TEST_DIR)
         logger.info('Loading successful!')
+        logger.info('- Model age is {}'.format(model.age))
     logger.info('All tests successful!')
 except Exception as e:
     logger.error('{} occured in test {}'.format(type(e), test))
