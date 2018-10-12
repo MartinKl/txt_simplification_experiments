@@ -263,11 +263,12 @@ class AE(SequenceModel):
         err = tf.add(err_z, err_r, name='err')
         self._losses = [err, err_r, err_z]
         params = tf.trainable_variables()
-        optimizer = tf.train.GradientDescentOptimizer(learning_rate=self._training_params.learning_rate)
-        gradients = tf.gradients(err, params)
-        clipped_gradients, _ = tf.clip_by_global_norm(gradients, clip_norm=self._training_params.clip_norm)
-        self._update = self._training_params.optimizer.apply_gradients(grads_and_vars=zip(clipped_gradients, params),
-                                                                 global_step=self.global_step)
+        #optimizer = tf.train.GradientDescentOptimizer(learning_rate=self._training_params.learning_rate)
+        #gradients = tf.gradients(err, params)
+        #clipped_gradients, _ = tf.clip_by_global_norm(gradients, clip_norm=self._training_params.clip_norm)
+        #self._update = self._training_params.optimizer.apply_gradients(grads_and_vars=zip(clipped_gradients, params),
+        #                                                         global_step=self.global_step)
+        self._update = tf.train.AdamOptimizer().minimize(err)
 
     def _step(self, x_n, x_s=None, weights_x_n=None, weights_x_s=None, forward_only=False):
         if not self.active:
@@ -331,9 +332,6 @@ class AE(SequenceModel):
             if batch_index >= max_i:
                 break
         logger.info('Epoch finished')
-
-    def recent_errors(self):
-        pass
 
 
 class VAE(SequenceModel):
