@@ -92,6 +92,8 @@ class SequenceModel(object):
         self.x_simple = tf.placeholder(tf.int32, shape=(None, model_params.n,), name='simple')
         self.w_simple = tf.placeholder(tf.float32, shape=(None, model_params.n,), name='sweights')
         self.global_step = tf.Variable(initial_value=0, trainable=False, name='global_step')
+        self._epoch = tf.Variable(initial_value=0, trainable=False, dtype=tf.int32, name='epoch')
+        self._count_epoch = tf.add(self._epoch, 1)
         b = training_params.batch_size
         d = model_params.h
         v = model_params.v
@@ -259,10 +261,14 @@ class AE(SequenceModel):
             if not self.active:
                 logger.warn('Model inactive, cancelling loop ...')
                 return
+            logger.info('Starting epoch ' + str(self._session.run([self._count_epoch])))
             self._consume(data=training_data, **kwargs)
             self._consume(data=validation_data, forward_only=True, **kwargs)
+            if self._auto_save:
+                self.save()
+        logger.info('Finished training after {} epochs'.format(self._epoch.eval(session=self._session)))
 
-    def _consume(self, data, forward_only=False, steps=None):
+    def _consume(self, data, forward_only=False, steps=None, report_every=1000):
         i = 0
         max_i = sys.maxsize if steps is None else steps
         logger.info('Starting data consumption ...')
@@ -273,13 +279,16 @@ class AE(SequenceModel):
         if steps is not None:
             logger.info('- max steps is ' + str(max_i))
         for batch in data.batches(batch_size=self._training_params.batch_size):
-            if not i % 200:
+            if not i % report_every:
                 logger.info('Step ' + str(i))
             self._step(*batch, forward_only=forward_only)
             i += 1
             if i >= max_i:
                 break
         logger.info('Epoch finished')
+
+    def recent_errors(self):
+        pass
 
 
 class VAE(SequenceModel):
