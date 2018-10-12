@@ -93,7 +93,7 @@ class SequenceModel(object):
         self.w_simple = tf.placeholder(tf.float32, shape=(None, model_params.n,), name='sweights')
         self.global_step = tf.Variable(initial_value=0, trainable=False, name='global_step')
         self._epoch = tf.Variable(initial_value=0, trainable=False, dtype=tf.int32, name='epoch')
-        self._count_epoch = tf.add(self._epoch, 1)
+        self._count_epoch = tf.assign(self._epoch, tf.add(self._epoch, 1))
         b = training_params.batch_size
         d = model_params.h
         v = model_params.v
@@ -261,7 +261,8 @@ class AE(SequenceModel):
             if not self.active:
                 logger.warn('Model inactive, cancelling loop ...')
                 return
-            logger.info('Starting epoch ' + str(self._session.run([self._count_epoch])))
+            self._session.run([self._count_epoch])
+            logger.info('Starting epoch ' + str(self._epoch.eval(session=self._session)))
             self._consume(data=training_data, **kwargs)
             self._consume(data=validation_data, forward_only=True, **kwargs)
             if self._auto_save:
