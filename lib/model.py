@@ -77,12 +77,18 @@ class TrainingParameters(object):
 
 
 class SequenceModel(object):
-    def __init__(self, model_params, training_params, clean_environment=True, auto_save=True, overwrite=False):
+    def __init__(self,
+                 model_params,
+                 training_params,
+                 clean_environment=True,
+                 auto_save=True,
+                 overwrite=False,
+                 log=True):
         self._auto_save = auto_save
         if overwrite or not os.path.exists(training_params.path):
             self._path = training_params.path
         else:
-            self._path = '_'.join((training_params.path, time.time()))
+            self._path = '_'.join((training_params.path, str(time.time())))
         self._session = None
         self._saver = None
         if clean_environment:
@@ -107,15 +113,29 @@ class SequenceModel(object):
             LSTMStateTuple(tf.zeros((b, v,), dtype=tf.float32), tf.zeros((b, v,), dtype=tf.float32))
         ]
         self._update = None
-        self._losses = None
+        self._losses = []
         self._training_params = training_params
         self._model_params = model_params
         self._build()
+        if log:
+            self._train_writer = None
+            self._valid_writer = None
+            self._summary = None
+            self._log_step = 0
+            self._log()
+        self._has_summary = log
         self._variables = tf.global_variables()  # check if more sophisticated sub setting is possible
         self._active = False
 
     def _build(self):
         raise NotImplementedError('Abstract class cannot be instantiated.')
+
+    def _log(self):
+        self._train_writer = tf.summary.FileWriter(logdir=os.path.join(self._training_params.path, 'train'))
+        self._valid_writer = tf.summary.FileWriter(logdir=os.path.join(self._training_params.path, 'valid'))
+        for loss in self._losses:
+            tf.summary.scalar(loss.name, loss)
+        self._summary = tf.summary.merge_all()
 
     def _step(self, x, y=None, weights_x=None, weights_y=None):
         raise NotImplementedError
@@ -253,12 +273,14 @@ class AE(SequenceModel):
         if not self.active:
             raise ValueError
         variables = self._losses + ([] if forward_only else [self._update])
+        if self._has_summary:
+            variables.append(self._summary)
         values = self._session.run(variables,
                                    feed_dict={'normal:0': x_n,
                                               'simple:0': x_s,
                                               'nweights:0': weights_x_n,
                                               'sweights:0': weights_x_s})
-        return np.array(values[:len(self._losses)]).flatten()
+        return np.array(values[:len(self._losses)]).flatten(), values[-1]
 
     def loop(self, training_data, validation_data, continue_callback=lambda: True, callback_args=(), **kwargs):
         while continue_callback(*callback_args):
@@ -273,8 +295,7 @@ class AE(SequenceModel):
                 self.save()
         logger.info('Finished training after {} epochs'.format(self._epoch.eval(session=self._session)))
 
-    def _consume(self, data, forward_only=False, steps=None, report_every=1000, **kwargs):
-        i = 0
+    def _consume(self, data, forward_only=False, steps=None, report_every=1000, log_every=100, **kwargs):
         max_i = sys.maxsize if steps is None else steps
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug('Starting data consumption ...')
@@ -283,18 +304,24 @@ class AE(SequenceModel):
         else:
             logger.info('- training')
         if steps is not None:
-            logger.info('- max steps is ' + str(max_i))
+            logger.warn('- max steps is ' + str(max_i))
         error = 1.
-        for batch in data.batches(batch_size=self._training_params.batch_size, **kwargs):
-            if not i % report_every:
+        for batch_index, batch in data.batches(batch_size=self._training_params.batch_size, **kwargs):
+            err_values, tail = self._step(*batch, forward_only=forward_only)
+            error *= err_values
+            if self._has_summary and not batch_index % log_every:
+                if forward_only:
+                    self._valid_writer.add_summary(tail, self._log_step)
+                else:
+                    self._train_writer.add_summary(tail, self._log_step)
+                self._log_step += 1
+            if batch_index and not batch_index % report_every:
                 logger.info(
-                    'Step {}, current {} error is {}'\
-                        .format(i, 'VALID' if forward_only else 'TRAIN', error ** ( 1 / report_every))
+                    'Step {}: current {} error is {}, accumulated error is {}'\
+                        .format(batch_index, 'VALID' if forward_only else 'TRAIN', error ** (1 / report_every), error)
                 )
                 error = 1.
-            error *= self._step(*batch, forward_only=forward_only)
-            i += 1
-            if i >= max_i:
+            if batch_index >= max_i:
                 break
         logger.info('Epoch finished')
 

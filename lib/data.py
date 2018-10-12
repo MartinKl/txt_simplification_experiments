@@ -28,9 +28,21 @@ class DataCollection(dict):
 class _DataSet(object):
     def __init__(self, data):
         self._data = np.array(data)
+        self._self_test()
+
+    def _self_test(self):
+        shapes = set()
+        i = 0
+        for normal, simple, w0, w1 in self._data.swapaxes(0, 1):
+            shapes.update({normal.shape, simple.shape, w0.shape, w1.shape})
+            if len(shapes) > 1:
+                raise ValueError('Data inconsistent! (index {})'.format(i))
+            i += 1
 
     def batches(self, batch_size, select=None):
-        indices = range(0, len(self._data), batch_size) if not select \
-            else np.random.choice(self._data[0].shape[0], select)
-        for i in range(0, len(self._data), batch_size):
-            yield self._data[:, i:i + batch_size]
+        indices = range(0, self._data.shape[1], batch_size) if not select \
+            else np.random.choice(self._data.shape[1], select)
+        for b_i, i in enumerate(indices):
+            if i + batch_size >= self._data.shape[1]:
+                i -= i + batch_size - self._data.shape[1]
+            yield b_i, self._data[:, i:i + batch_size]

@@ -30,11 +30,12 @@ training_params = TrainingParameters(os.path.join(TEST_DIR, 'test'))
 test = 'TRAIN'
 try:
     logger.info('Training test ...')
-    with AE(model_params, training_params) as model:
+    with AE(model_params, training_params, overwrite=True) as model:
         model.loop(training_data=data['train'],
                    validation_data=data['valid'],
-                   steps=50, 
+                   steps=2000,
                    report_every=10,
+                   log_every=3,
                    continue_callback=lambda m: m.age < 3,
                    callback_args=[model])
         logger.info('Training and validation test successful!')
@@ -42,12 +43,11 @@ try:
         logger.info('Saving successful!')
     test = 'LOAD'
     logger.info('Loading test ...')
-    with AE(model_params, training_params) as model:
+    with AE(model_params, training_params, overwrite=True, log=False, auto_save=False) as model:
         model.load(TEST_DIR)
         logger.info('Loading successful!')
         logger.info('- Model age is {}'.format(model.age))
     logger.info('All tests successful!')
 except Exception as e:
-    logger.error('{} occured in test {}'.format(type(e), test))
-finally:
-    shutil.rmtree(TEST_DIR)
+    logger.error('{} occured in test {}'.format(type(e).__name__, test))
+    raise e
