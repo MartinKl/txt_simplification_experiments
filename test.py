@@ -31,7 +31,12 @@ test = 'TRAIN'
 try:
     logger.info('Training test ...')
     with AE(model_params, training_params) as model:
-        model.loop(data['train'], data['valid'], steps=1, continue_callback=lambda m: m.age < 3, callback_args=[model])
+        model.loop(training_data=data['train'],
+                   validation_data=data['valid'],
+                   steps=50, 
+                   report_every=10,
+                   continue_callback=lambda m: m.age < 3,
+                   callback_args=[model])
         logger.info('Training and validation test successful!')
         model.save()
         logger.info('Saving successful!')

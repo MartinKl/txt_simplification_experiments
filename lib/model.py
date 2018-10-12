@@ -268,25 +268,31 @@ class AE(SequenceModel):
             self._session.run([self._count_epoch])
             logger.info('Starting epoch ' + str(self._epoch.eval(session=self._session)))
             self._consume(data=training_data, **kwargs)
-            self._consume(data=validation_data, forward_only=True, **kwargs)
+            self._consume(data=validation_data, forward_only=True, select=2000, **kwargs)
             if self._auto_save:
                 self.save()
         logger.info('Finished training after {} epochs'.format(self._epoch.eval(session=self._session)))
 
-    def _consume(self, data, forward_only=False, steps=None, report_every=1000):
+    def _consume(self, data, forward_only=False, steps=None, report_every=1000, **kwargs):
         i = 0
         max_i = sys.maxsize if steps is None else steps
-        logger.info('Starting data consumption ...')
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug('Starting data consumption ...')
         if forward_only:
-            logger.info('- consuming forward only')
+            logger.info('- validating / testing')
         else:
             logger.info('- training')
         if steps is not None:
             logger.info('- max steps is ' + str(max_i))
-        for batch in data.batches(batch_size=self._training_params.batch_size):
+        error = 1.
+        for batch in data.batches(batch_size=self._training_params.batch_size, **kwargs):
             if not i % report_every:
-                logger.info('Step ' + str(i))
-            self._step(*batch, forward_only=forward_only)
+                logger.info(
+                    'Step {}, current {} error is {}'\
+                        .format(i, 'VALID' if forward_only else 'TRAIN', error ** ( 1 / report_every))
+                )
+                error = 1.
+            error *= self._step(*batch, forward_only=forward_only)
             i += 1
             if i >= max_i:
                 break

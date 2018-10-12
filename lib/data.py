@@ -29,6 +29,8 @@ class _DataSet(object):
     def __init__(self, data):
         self._data = np.array(data)
 
-    def batches(self, batch_size):
+    def batches(self, batch_size, select=None):
+        indices = range(0, len(self._data), batch_size) if not select \
+            else np.random.choice(self._data[0].shape[0], select)
         for i in range(0, len(self._data), batch_size):
             yield self._data[:, i:i + batch_size]
