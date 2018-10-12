@@ -40,6 +40,13 @@ class ModelParameters(object):
     def n(self):
         return self._n
 
+    def __str__(self):
+        return ':'.join((type(self).__name__,
+                         'V', str(self.v),
+                         'EMB', str(self.emb),
+                         'H', str(self.h),
+                         'N', str(self.n)))
+
 
 class TrainingParameters(object):
     def __init__(self,
