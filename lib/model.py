@@ -308,7 +308,9 @@ class AE(SequenceModel):
                  forward_only=False,
                  steps=None,
                  report_every=1000,
-                 log_every=100, save_every=10000, **kwargs):
+                 log_every=100,
+                 save_every=200,
+                 **kwargs):
         max_i = sys.maxsize if steps is None else steps
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug('Starting data consumption ...')
