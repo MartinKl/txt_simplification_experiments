@@ -87,7 +87,7 @@ WRB 	wh- adverb (how, where, when)	1
 UNK	unknown	0
 -	from here ptb	0
 CC	Coordinating conjunction	1
-CD	Cardinal number	1
+CD	Cardinal number	0
 DT	Determiner	1
 EX	Existential there	1
 FW	Foreign word	0
@@ -109,13 +109,13 @@ RB	Adverb	0
 RBR	Adverb, comparative	0
 RBS	Adverb, superlative	0
 RP	Particle	1
-SYM	Symbol	1
+SYM	Symbol	0
 TO	to	1
 UH	Interjection	1
 VB	Verb, base form	0
 VBD	Verb, past tense	0
-VBG	Verb, gerund or present participle	1
-VBN	Verb, past participle	1
+VBG	Verb, gerund or present participle	0
+VBN	Verb, past participle	0
 VBP	Verb, non-3rd person singular present	0
 VBZ	Verb, 3rd person singular present	0
 WDT	Wh-determiner	1

@@ -61,9 +61,10 @@ with open('data/tagset.tsv') as f:
 for line in tagset_info_raw:
     l = line.strip().split('\t')
     tag = l[0].strip()
-    decision = l[2].strip()
+    decision = l[-1].strip()
     tagset_info[tag] = int(decision)
-vocab = {'': 0}
+vocab = {'': 0, '<eos>': 1}
+count_pump = defaultdict(set)
 for par_n, par_s in zip(data[NORMAL], data[SIMPLE]):
     readable_n = [decrypter[ix] for ix in par_n]
     readable_s = [decrypter[ix] for ix in par_s]
@@ -72,17 +73,20 @@ for par_n, par_s in zip(data[NORMAL], data[SIMPLE]):
     reduced = [[], []]
     for i in range(2):
         for w, tag in (pos_n, pos_s)[i]:
-            if tagset_info[tag] or freq_data[w] >= W_F_THRESHOLD:
+            if tagset_info[tag]:# or freq_data[w] >= W_F_THRESHOLD:
                 representation = w
+                count_pump[tag].add(w)
             else:
                 representation = tag
             if representation not in vocab:
                 vocab[representation] = len(vocab)
             reduced[i].append(vocab[representation])
+        reduced[i].append(1)
     data_reduced[NORMAL].append(reduced[0])
     data_reduced[SIMPLE].append(reduced[1])
+print(*[':'.join((tag, str(len(forms))))for tag, forms in count_pump.items()], sep=os.linesep)
 print(len(vocab))
-with open(os.path.join(TARGET_DIR, 'dict_reduced.bin'), 'wb') as f:
+with open(os.path.join(TARGET_DIR, 'dict_minimal.bin'), 'wb') as f:
     pickle.dump(vocab, f)
-with open(os.path.join(TARGET_DIR, 'data_reduced.bin'), 'wb') as f:
+with open(os.path.join(TARGET_DIR, 'data_minimal.bin'), 'wb') as f:
     pickle.dump(data_reduced, f)
