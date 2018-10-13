@@ -127,6 +127,7 @@ class SequenceModel(object):
         self._training_params = training_params
         self._model_params = model_params
         self._build()
+        self._variables = tf.global_variables()  # check if more sophisticated sub setting is possible
         if os.path.exists(self._path):
             self.load(self._path)
         if log:
@@ -136,7 +137,6 @@ class SequenceModel(object):
             self._log_step = 0
             self._log()
         self._has_summary = log
-        self._variables = tf.global_variables()  # check if more sophisticated sub setting is possible
         self._active = False
 
     def _build(self):
