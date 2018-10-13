@@ -14,7 +14,7 @@ model_params = ModelParameters(sequence_length=normal.shape[1],
                                vocabulary_size=max(normal.max(), simple.max()) + 1,
                                embedding_dim=16,
                                hidden_dim=64)
-training_params = TrainingParameters('test_new_model_delete_please', batch_size=1)
+training_params = TrainingParameters('test_new_model_delete_please')
 data = DataCollection(normal, simple, normal_w, simple_w)
 with AE(training_params=training_params, model_params=model_params) as model:
     model.loop(training_data=data['train'],
