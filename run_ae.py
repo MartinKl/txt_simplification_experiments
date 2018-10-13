@@ -1,6 +1,7 @@
 from lib.data import DataCollection
 from lib.model import AE, ModelParameters, TrainingParameters
 import numpy as np
+import os
 
 normal = np.load('bin_data/uniwiki_minimal/normal.npy')
 normal_w = np.load('bin_data/uniwiki_minimal/w_normal.npy')
@@ -14,9 +15,10 @@ model_params = ModelParameters(sequence_length=normal.shape[1],
                                vocabulary_size=max(normal.max(), simple.max()) + 1,
                                embedding_dim=16,
                                hidden_dim=64)
-training_params = TrainingParameters('ae_train_dir')
+training_params = TrainingParameters(os.path.abspath('ae_train_dir'))
 data = DataCollection(normal, simple, normal_w, simple_w)
 with AE(training_params=training_params, model_params=model_params) as model:
+    model.save()
     model.loop(training_data=data['train'],
                validation_data=data['valid'],
                report_every=400,
