@@ -26,6 +26,7 @@ model_params = ModelParameters(sequence_length=normal.shape[1],
 training_params = TrainingParameters(os.path.abspath('ae_train_dir'),
                                      batch_size=args.bs,
                                      learning_rate=args.lr)
+print(training_params)
 data = DataCollection(normal, simple, normal_w, simple_w)
 with AE(training_params=training_params, model_params=model_params) as model:
     model.save()

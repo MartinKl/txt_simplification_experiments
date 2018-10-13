@@ -82,6 +82,12 @@ class TrainingParameters(object):
     def path(self):
         return self._path
 
+    def __str__(self):
+        return ':'.join((type(self).__name__,
+                         'BS', str(self.batch_size),
+                         'LR', str(self.learning_rate),
+                         'PATH', str(self.path)))
+
 
 class SequenceModel(object):
     def __init__(self,
@@ -92,10 +98,7 @@ class SequenceModel(object):
                  overwrite=False,
                  log=True):
         self._auto_save = auto_save
-        if overwrite or not os.path.exists(training_params.path):
-            self._path = training_params.path
-        else:
-            self._path = '_'.join((training_params.path, str(time.time())))
+        self._path = training_params.path
         self._session = None
         self._saver = None
         if clean_environment:
@@ -124,6 +127,8 @@ class SequenceModel(object):
         self._training_params = training_params
         self._model_params = model_params
         self._build()
+        if os.path.exists(self._path):
+            self.load(self._path)
         if log:
             self._train_writer = None
             self._valid_writer = None
