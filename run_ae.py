@@ -2,10 +2,10 @@ from lib.data import DataCollection
 from lib.model import AE, ModelParameters, TrainingParameters
 import numpy as np
 
-normal = np.load('bin_data/uniwiki34/normal.npy')
-normal_w = np.load('bin_data/uniwiki34/w_normal.npy')
-simple = np.load('bin_data/uniwiki34/simple.npy')
-simple_w = np.load('bin_data/uniwiki34/w_simple.npy')
+normal = np.load('bin_data/uniwiki_minimal/normal.npy')
+normal_w = np.load('bin_data/uniwiki_minimal/w_normal.npy')
+simple = np.load('bin_data/uniwiki_minimal/simple.npy')
+simple_w = np.load('bin_data/uniwiki_minimal/w_simple.npy')
 
 train_set = (0, int(.8 * normal.shape[0]))
 valid_set = (train_set[1] + 1, int(.9 * normal.shape[0]))
