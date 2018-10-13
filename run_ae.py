@@ -28,7 +28,7 @@ training_params = TrainingParameters(os.path.abspath('ae_train_dir'),
                                      learning_rate=args.lr)
 print(training_params)
 data = DataCollection(normal, simple, normal_w, simple_w)
-with AE(training_params=training_params, model_params=model_params) as model:
+with AE(training_params=training_params, model_params=model_params, load=True) as model:
     model.save()
     model.loop(training_data=data['train'],
                validation_data=data['valid'],

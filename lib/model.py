@@ -96,6 +96,7 @@ class SequenceModel(object):
                  clean_environment=True,
                  auto_save=True,
                  overwrite=False,
+                 load=False,
                  log=True):
         self._auto_save = auto_save
         self._path = training_params.path
@@ -128,8 +129,6 @@ class SequenceModel(object):
         self._model_params = model_params
         self._build()
         self._variables = tf.global_variables()  # check if more sophisticated sub setting is possible
-        if os.path.exists(self._path):
-            self.load(self._path)
         if log:
             self._train_writer = None
             self._valid_writer = None
@@ -138,6 +137,7 @@ class SequenceModel(object):
             self._log()
         self._has_summary = log
         self._active = False
+        self._load = load
 
     def _build(self):
         raise NotImplementedError('Abstract class cannot be instantiated.')
@@ -178,7 +178,10 @@ class SequenceModel(object):
         config = tf.ConfigProto(gpu_options=tf.GPUOptions(allow_growth=True))
         self._session = tf.Session(config=config)
         self._session.__enter__()
-        self._session.run(tf.global_variables_initializer())
+        if self._load:
+            self.load(self._path)
+        else:
+            self._session.run(tf.global_variables_initializer())
         self._active = True
         return self
 
