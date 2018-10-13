@@ -275,7 +275,7 @@ class AE(SequenceModel):
         #clipped_gradients, _ = tf.clip_by_global_norm(gradients, clip_norm=self._training_params.clip_norm)
         #self._update = self._training_params.optimizer.apply_gradients(grads_and_vars=zip(clipped_gradients, params),
         #                                                         global_step=self.global_step)
-        self._update = tf.train.AdamOptimizer().minimize(err)
+        self._update = tf.train.AdamOptimizer(learning_rate=self._training_params.learning_rate).minimize(err)
 
     def _step(self, x_n, x_s=None, weights_x_n=None, weights_x_s=None, forward_only=False):
         if not self.active:
@@ -309,7 +309,7 @@ class AE(SequenceModel):
                  steps=None,
                  report_every=1000,
                  log_every=100,
-                 save_every=200,
+                 save_every=sys.maxsize,
                  **kwargs):
         max_i = sys.maxsize if steps is None else steps
         if logger.isEnabledFor(logging.DEBUG):

@@ -5,6 +5,7 @@ import numpy as np
 import os
 
 parser = ArgumentParser()
+parser.add_argument('--lr', type=float, default=.1, help='learning rate')
 parser.add_argument('--bs', type=int, default=32, help='batch size')
 parser.add_argument('--report', type=int, default=100)
 parser.add_argument('--log', type=int, default=50)
@@ -22,7 +23,9 @@ model_params = ModelParameters(sequence_length=normal.shape[1],
                                vocabulary_size=max(normal.max(), simple.max()) + 1,
                                embedding_dim=16,
                                hidden_dim=64)
-training_params = TrainingParameters(os.path.abspath('ae_train_dir'), batch_size=args.bs)
+training_params = TrainingParameters(os.path.abspath('ae_train_dir'),
+                                     batch_size=args.bs,
+                                     learning_rate=args.lr)
 data = DataCollection(normal, simple, normal_w, simple_w)
 with AE(training_params=training_params, model_params=model_params) as model:
     model.save()
