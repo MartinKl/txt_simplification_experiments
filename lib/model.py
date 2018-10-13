@@ -155,7 +155,7 @@ class SequenceModel(object):
     def save(self):
         if self._saver is None:
             self._saver = tf.train.Saver(var_list=self._variables)
-        self._saver.save(sess=self._session, save_path=self._path)
+        self._saver.save(sess=self._session, save_path=os.path.join(self._path, type(self).__name__))
         logging.info('Model state saved in ' + self._path)
 
     def loop(self, *args, **kwargs):
