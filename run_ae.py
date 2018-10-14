@@ -1,11 +1,12 @@
 from argparse import ArgumentParser
 from lib.data import DataCollection
-from lib.model import AE, ModelParameters, TrainingParameters
+from lib.model import AE, SimpleAE, ModelParameters, TrainingParameters
 import numpy as np
 import os
 
 parser = ArgumentParser()
 parser.add_argument('directory', type=str, help='training and log dir')
+parser.add_argument('--simple', action='store_true')
 parser.add_argument('--lr', type=float, default=.1, help='learning rate')
 parser.add_argument('--bs', type=int, default=32, help='batch size')
 parser.add_argument('--report', type=int, default=100)
@@ -31,7 +32,8 @@ training_params = TrainingParameters(os.path.abspath(args.directory),
                                      learning_rate=args.lr)
 print(training_params)
 data = DataCollection(normal, simple, normal_w, simple_w)
-with AE(training_params=training_params, model_params=model_params, load=args.load) as model:
+model_type = SimpleAE if args.simple else AE
+with model_type(training_params=training_params, model_params=model_params, load=args.load) as model:
     model.save()
     model.loop(training_data=data['train'],
                validation_data=data['valid'],

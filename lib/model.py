@@ -351,6 +351,78 @@ class AE(SequenceModel):
         logger.info('Epoch finished')
 
 
+class SimpleAE(AE):
+    def _build(self):
+        with tf.variable_scope('embedding') as scope:
+            embedded_n = tf.contrib.layers.embed_sequence(self.x_normal,
+                                                          vocab_size=self._model_params.v,
+                                                          embed_dim=self._model_params.emb,
+                                                          scope=scope)
+            embedded_s = tf.contrib.layers.embed_sequence(self.x_simple,
+                                                          reuse=True,
+                                                          scope=scope)
+        with tf.variable_scope('encoder'):
+            encoder = MultiRNNCell([LSTMCell(self._model_params.h), LSTMCell(self._model_params.h)])
+        with tf.variable_scope('encode_n') as scope:
+            z, state = encoder(embedded_n[:, 0], self._initial_encoder_state)
+        with tf.variable_scope(scope, reuse=True):
+            for i in range(1, self._model_params.n):
+                z, state = encoder(embedded_n[:, i], state)
+            z_normal = z
+        with tf.variable_scope('encode_s') as scope:
+            z, state = encoder(embedded_s[:, 0], self._initial_encoder_state)
+        with tf.variable_scope(scope, reuse=True):
+            for i in range(1, self._model_params.n):
+                z, state = encoder(embedded_s[:, i], state)
+            z_simple = z
+        with tf.variable_scope('decode_n') as scope:
+            decoder_n = MultiRNNCell([
+                LSTMCell(self._model_params.h),
+                LSTMCell(self._model_params.h),
+                LSTMCell(self._model_params.v)
+            ])
+            state = self._initial_decoder_state
+            logits_normal = []
+            logits, state = decoder_n(z_normal, state)
+            logits_normal.append(logits)
+        with tf.variable_scope(scope, reuse=True):
+            for _ in range(1, self._model_params.n):
+                logits, state = decoder_n(z_normal, state)
+                logits_normal.append(logits)
+            err_r_normal = tf.reduce_sum(sequence_loss(tf.transpose(tf.convert_to_tensor(logits_normal), (1, 0, 2)),
+                                                       self.x_normal,
+                                                       self.w_normal))
+        with tf.variable_scope('decode_s') as scope:
+            decoder_s = MultiRNNCell([
+                LSTMCell(self._model_params.h),
+                LSTMCell(self._model_params.h),
+                LSTMCell(self._model_params.v)
+            ])
+            state = self._initial_decoder_state
+            logits_simple = []
+            logits, state = decoder_s(z_simple, state)
+            logits_simple.append(logits)
+        with tf.variable_scope(scope, reuse=True):
+            for _ in range(1, self._model_params.n):
+                logits, state = decoder_s(z_simple, state)
+                logits_simple.append(logits)
+            err_r_simple = tf.reduce_sum(sequence_loss(tf.transpose(tf.convert_to_tensor(logits_simple), (1, 0, 2)),
+                                                       self.x_simple,
+                                                       self.w_simple))
+        # losses
+        err_z = tf.reduce_sum(tf.squared_difference(z_simple, z_normal), name='repr_error')
+        err_r = tf.add(err_r_normal, err_r_simple, name='rec_err')
+        err = tf.add(err_z, err_r, name='err')
+        self._losses = [err, err_r, err_z]
+        params = tf.trainable_variables()
+        #optimizer = tf.train.GradientDescentOptimizer(learning_rate=self._training_params.learning_rate)
+        #gradients = tf.gradients(err, params)
+        #clipped_gradients, _ = tf.clip_by_global_norm(gradients, clip_norm=self._training_params.clip_norm)
+        #self._update = self._training_params.optimizer.apply_gradients(grads_and_vars=zip(clipped_gradients, params),
+        #                                                         global_step=self.global_step)
+        self._update = tf.train.AdamOptimizer(learning_rate=self._training_params.learning_rate).minimize(err)
+
+
 class VAE(SequenceModel):
     def _build(self):
         pass

@@ -1,5 +1,5 @@
 from lib.data import DataCollection
-from lib.model import AE, ModelParameters, TrainingParameters
+from lib.model import AE, SimpleAE, ModelParameters, TrainingParameters
 import logging
 import numpy as np
 import os
@@ -30,7 +30,7 @@ training_params = TrainingParameters(os.path.join(TEST_DIR, 'test'))
 test = 'TRAIN'
 try:
     logger.info('Training test ...')
-    with AE(model_params, training_params, overwrite=True) as model:
+    with SimpleAE(model_params, training_params, overwrite=True) as model:
         model.loop(training_data=data['train'],
                    validation_data=data['valid'],
                    steps=2000,
