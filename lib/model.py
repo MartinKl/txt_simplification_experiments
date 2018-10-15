@@ -126,6 +126,10 @@ class SimplificationModel(object):
         self._losses = []
         self._training_params = training_params
         self._model_params = model_params
+        self._z_s = None
+        self._z_n = None
+        self._simple_logits = None
+        self._normal_logits = None
         self._build()
         self._variables = tf.global_variables()  # check if more sophisticated sub setting is possible
         if log:
@@ -172,6 +176,9 @@ class SimplificationModel(object):
     @property
     def age(self):
         return self._epoch.eval(session=self._session)
+
+    def predict(self, x):
+        raise NotImplementedError
 
     def __enter__(self):
         config = tf.ConfigProto(gpu_options=tf.GPUOptions(allow_growth=True))
@@ -271,6 +278,10 @@ class AE(SimplificationModel):
             err_r_simple = sequence_loss(tf.transpose(tf.convert_to_tensor(logits_simple), (1, 0, 2)),
                                                        self.x_simple,
                                                        self.w_simple)
+        self._normal_logits = logits_normal
+        self._simple_logits = logits_simple
+        self._zs = z_simple
+        self._zs = z_normal
         # losses
         err_z = tf.squared_difference(z_simple, z_normal, name='repr_error')
         err_r = tf.add(err_r_normal, err_r_simple, name='rec_err')
@@ -291,6 +302,15 @@ class AE(SimplificationModel):
                                               'nweights:0': weights_x_n,
                                               'sweights:0': weights_x_s})
         return np.array(values[:len(self._losses)]).flatten(), values[-1]
+
+    def predict(self, x_n, x_s=None, weights_x_n=None, weights_x_s=None):
+        forward_only = True
+        values = self._session.run([self._normal_logits, self._simple_logits, self._zn, self._zs],
+                                   feed_dict={'normal:0': x_n,
+                                              'simple:0': x_s,
+                                              'nweights:0': weights_x_n,
+                                              'sweights:0': weights_x_s})
+        return values
 
     def loop(self, training_data, validation_data, continue_callback=lambda: True, callback_args=(), **kwargs):
         while continue_callback(*callback_args):
