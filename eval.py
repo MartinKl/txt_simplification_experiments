@@ -56,16 +56,15 @@ with model_type(training_params=training_params,
             z_simple[r].append(values[3])
             if run_again:
                 d_vals[r].append(values[4])
-        if run_again:
+        if not r and run_again:
             print('running again with theta=1')
             kwargs = dict(tc=1.)
-            run_again = False
 
 if not os.path.exists(args.out_dir):
     os.mkdir(args.out_dir)
-print(predictions_normal)
-np.save(os.path.join(args.out_dir, 'normal_logits.npy'), np.array(predictions_normal).astype(np.int16))
-np.save(os.path.join(args.out_dir, 'simple_logits.npy'), np.array(predictions_simple).astype(np.int16))
-np.save(os.path.join(args.out_dir, 'z_normal.npy'), np.array(z_normal))
-np.save(os.path.join(args.out_dir, 'z_simple.npy'), np.array(z_simple))
-np.save(os.path.join(args.out_dir, 'd_outs.npy'), np.array(d_vals))
+np.save(os.path.join(args.out_dir, 'normal_logits.npy'), np.array(predictions_normal[:1 + run_again]).astype(np.int16))
+np.save(os.path.join(args.out_dir, 'simple_logits.npy'), np.array(predictions_simple[:1 + run_again]).astype(np.int16))
+np.save(os.path.join(args.out_dir, 'z_normal.npy'), np.array(z_normal[:1 + run_again]))
+np.save(os.path.join(args.out_dir, 'z_simple.npy'), np.array(z_simple[:1 + run_again]))
+if run_again:
+    np.save(os.path.join(args.out_dir, 'd_outs.npy'), np.array(d_vals))
