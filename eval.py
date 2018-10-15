@@ -66,4 +66,4 @@ np.save(os.path.join(args.out_dir, 'normal_logits.npy'), np.array(predictions_no
 np.save(os.path.join(args.out_dir, 'simple_logits.npy'), np.array(predictions_simple))
 np.save(os.path.join(args.out_dir, 'z_normal.npy'), np.array(z_normal))
 np.save(os.path.join(args.out_dir, 'z_simple.npy'), np.array(z_simple))
-np.save(os.path.join(args.out_dir, 'd_outs.npy'), np.array(d_outs))
+np.save(os.path.join(args.out_dir, 'd_outs.npy'), np.array(d_vals))
