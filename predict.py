@@ -61,8 +61,8 @@ with model_type(training_params=training_params,
 
 if not os.path.exists(args.out_dir):
     os.mkdir(args.out_dir)
-np.save(os.path.join(args.out_dir, 'normal_logits.npy'), np.array(predictions_normal[:1 + run_again]).astype(np.int16))
-np.save(os.path.join(args.out_dir, 'simple_logits.npy'), np.array(predictions_simple[:1 + run_again]).astype(np.int16))
+np.save(os.path.join(args.out_dir, 'normal.npy'), np.array(predictions_normal[:1 + run_again]).astype(np.int16))
+np.save(os.path.join(args.out_dir, 'simple.npy'), np.array(predictions_simple[:1 + run_again]).astype(np.int16))
 np.save(os.path.join(args.out_dir, 'z_normal.npy'), np.array(z_normal[:1 + run_again]))
 np.save(os.path.join(args.out_dir, 'z_simple.npy'), np.array(z_simple[:1 + run_again]))
 if run_again:
