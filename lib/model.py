@@ -251,9 +251,9 @@ class AE(SimplificationModel):
             for _ in range(1, self._model_params.n):
                 logits, state = decoder_n(z_normal, state)
                 logits_normal.append(logits)
-            err_r_normal = tf.reduce_sum(sequence_loss(tf.transpose(tf.convert_to_tensor(logits_normal), (1, 0, 2)),
+            err_r_normal = sequence_loss(tf.transpose(tf.convert_to_tensor(logits_normal), (1, 0, 2)),
                                                        self.x_normal,
-                                                       self.w_normal))
+                                                       self.w_normal)
         with tf.variable_scope('decode_s') as scope:
             decoder_s = MultiRNNCell([
                 LSTMCell(self._model_params.h),
@@ -268,11 +268,11 @@ class AE(SimplificationModel):
             for _ in range(1, self._model_params.n):
                 logits, state = decoder_s(z_simple, state)
                 logits_simple.append(logits)
-            err_r_simple = tf.reduce_sum(sequence_loss(tf.transpose(tf.convert_to_tensor(logits_simple), (1, 0, 2)),
+            err_r_simple = sequence_loss(tf.transpose(tf.convert_to_tensor(logits_simple), (1, 0, 2)),
                                                        self.x_simple,
-                                                       self.w_simple))
+                                                       self.w_simple)
         # losses
-        err_z = tf.reduce_sum(tf.squared_difference(z_simple, z_normal), name='repr_error')
+        err_z = tf.squared_difference(z_simple, z_normal, name='repr_error')
         err_r = tf.add(err_r_normal, err_r_simple, name='rec_err')
         err = tf.add(err_z, err_r, name='err')
         self._losses = [err, err_r, err_z]
@@ -421,7 +421,7 @@ class DiscriminatorModel(SimplificationModel):
         self._train_writer = tf.summary.FileWriter(logdir=os.path.join(self._training_params.path, 'train'))
         self._valid_writer = tf.summary.FileWriter(logdir=os.path.join(self._training_params.path, 'valid'))
         for loss in self._losses:
-            tf.summary.scalar(loss.name, loss)
+            tf.summary.scalar(loss.name, tf.reduce_mean(loss))
         self._summary = tf.summary.merge_all()
 
     def _build(self):
@@ -485,10 +485,10 @@ class DiscriminatorModel(SimplificationModel):
             for _ in range(1, self._model_params.n):
                 logits, state = decoder_n(z_normal, state)
                 logits_normal.append(logits)
-            decoder_loss_normal = tf.reduce_sum(sequence_loss(tf.transpose(tf.convert_to_tensor(logits_normal),
+            decoder_loss_normal = sequence_loss(tf.transpose(tf.convert_to_tensor(logits_normal),
                                                                            (1, 0, 2)),
-                                                self.x_normal,
-                                                self.w_normal))
+                                                               self.x_normal,
+                                                               self.w_normal)
         with tf.variable_scope('decode_s') as scope:
             decoder_s = MultiRNNCell([
                 LSTMCell(self._model_params.h),
@@ -503,32 +503,39 @@ class DiscriminatorModel(SimplificationModel):
             for _ in range(1, self._model_params.n):
                 logits, state = decoder_s(z_simple, state)
                 logits_simple.append(logits)
-            decoder_loss_simple = tf.reduce_sum(sequence_loss(tf.transpose(tf.convert_to_tensor(logits_simple),
+            decoder_loss_simple = sequence_loss(tf.transpose(tf.convert_to_tensor(logits_simple),
                                                                            (1, 0, 2)),
-                                                self.x_simple,
-                                                self.w_simple))
+                                                               self.x_simple,
+                                                               self.w_simple)
         # losses
         ae_loss = tf.add(decoder_loss_normal, decoder_loss_simple, name='seq2seq_loss')
-        dsc_dims = [self._model_params.h // (2 ** e) for e in range(1, int(np.log2(self._model_params.h // 2)))] + [1]
+        dsc_dims = [self._model_params.h // (2 ** e) for e in range(0, int(np.log2(self._model_params.h // 2)))] + [1]
+        logger.info('discriminator dimensions are {}'.format('-'.join(str(d) for d in dsc_dims)))
+        training_criterion = tf.placeholder(dtype=tf.float32, shape=(), name='train_crit')
         with tf.variable_scope('discriminator') as dsc_scope:
             # the discriminator's output probability is chosen as probability that the input was a normal, i. e. complex
             # expression. Thus, the probability can also be interpreted as complexity score with higher values
             # expressing a higher level of complexity
-            from_normal = tf.sigmoid(stack(z_normal,
-                                           layer=fully_connected,
-                                           stack_args=dsc_dims))
-            from_simple = tf.sigmoid(stack(z_simple,
-                                           layer=fully_connected,
-                                           stack_args=dsc_dims,
-                                           reuse=tf.AUTO_REUSE))
-            err_dsc = tf.add(tf.squared_difference(1., from_normal), tf.squared_difference(0., from_simple),
+            o = z_normal
+            for i, dim in enumerate(dsc_dims):
+                o = tf.layers.dense(o, dim, name='dsc_dense_{}'.format(i))
+            from_normal = training_criterion * tf.sigmoid(o)
+            o = z_simple
+            for i, dim in enumerate(dsc_dims):
+                o = tf.layers.dense(o, dim, reuse=True, name='dsc_dense_{}'.format(i))
+            from_simple = (1. - training_criterion) * tf.sigmoid(o)
+            err_dsc = tf.add(tf.squared_difference(1., from_normal),
+                             tf.squared_difference(0., from_simple),
                              name='discriminator_loss')
-        err_g = tf.negative(tf.log(err_dsc))
+        err_g = tf.negative(tf.log(.1 * err_dsc))
         # optimization
         ## optimizers
         dsc_optimizer = tf.train.AdamOptimizer(learning_rate=self._training_params.learning_rate)
         ae_optimizer = tf.train.AdamOptimizer(learning_rate=self._training_params.learning_rate)  # shared optimizer for alignment of z's and auto-encoding (potential pitfall, but separate not better)
         ## updates
+
+        def var_filter(collection):
+            return list(filter(lambda var: hasattr(var, 'dtype'), collection))
         dsc_vars = tf.global_variables(scope=dsc_scope.name)
         self._dsc_update = dsc_optimizer.minimize(err_dsc, var_list=dsc_vars)
         self._enc_update = ae_optimizer.minimize(err_g)
@@ -536,46 +543,50 @@ class DiscriminatorModel(SimplificationModel):
         enc_vars = []
         for scope_name in enc_scopes:
             enc_vars.extend(tf.global_variables(scope=scope_name))
-        self._enc_update = ae_optimizer.minimize(err_g, var_list=enc_vars)
+        self._enc_update = ae_optimizer.minimize(err_g, var_list=var_filter(enc_vars))
         ae_vars = [var for var in tf.global_variables() if var not in set(dsc_vars)]
-        self._update = ae_optimizer.minimize(ae_optimizer, var_list=ae_vars)
+        self._update = ae_optimizer.minimize(ae_loss, var_list=var_filter(ae_vars))
         self._losses = [ae_loss, err_dsc]
 
-    def _step(self, x_n, x_s=None, weights_x_n=None, weights_x_s=None, forward_only=False):
+    def _step(self, x_n, x_s=None, weights_x_n=None, weights_x_s=None, forward_only=False, tc=0.):
         if not self.active:
             raise ValueError
-        variables = self._losses + ([] if forward_only else [self._update])
+        variables = self._losses + ([] if forward_only else [self._update, self._enc_update, self._dsc_update])
         if self._has_summary:
             variables.append(self._summary)
         values = self._session.run(variables,
                                    feed_dict={'normal:0': x_n,
                                               'simple:0': x_s,
                                               'nweights:0': weights_x_n,
-                                              'sweights:0': weights_x_s})
-        return np.array(values[:len(self._losses)]).flatten(), values[-1]
+                                              'sweights:0': weights_x_s,
+                                              'train_crit:0': tc})
+        return np.array([values[0], values[1].mean()]), values[-1]
 
-    def _pre_train_dsc(self, data, examples=1000):
+    def _pre_train_dsc(self, data, examples=10000):
         # first pre-train the ae a little, to make sure, encoding of z is a little more sophisticated than just
         # max-values or 0-vectors
-        for _, batch in data.batches(select=50):
+        tc = False
+        for _, batch in data.batches(batch_size=self._training_params.batch_size, select=200):
             x_n, x_s, weights_x_n, weights_x_s = batch
             self._session.run([self._update],
                               feed_dict={'normal:0': x_n,
                                          'simple:0': x_s,
                                          'nweights:0': weights_x_n,
-                                         'sweights:0': weights_x_s})
+                                         'sweights:0': weights_x_s,
+                                         'train_crit:0': .3})
         n = examples // self._training_params.batch_size
         loss_values = []
         loss = self._losses[1]
-        for _, batch in data.batches(select=n):
+        for _, batch in data.batches(batch_size=self._training_params.batch_size, select=n):
             x_n, x_s, weights_x_n, weights_x_s = batch
             value, _ = self._session.run([loss, self._dsc_update],
                                          feed_dict={'normal:0': x_n,
                                                     'simple:0': x_s,
                                                     'nweights:0': weights_x_n,
-                                                    'sweights:0': weights_x_s})
+                                                    'sweights:0': weights_x_s,
+                                                    'train_crit:0': tc})
             loss_values.append(value)
-        return loss_values[:3], loss_values[-3:]
+        return np.array(loss_values[:3]).mean(), np.array(loss_values[-3:]).mean()
 
     def loop(self, training_data, validation_data, continue_callback=lambda: True, callback_args=(), **kwargs):
         warn_message = 'Model inactive, cancelling loop ...'
@@ -584,7 +595,7 @@ class DiscriminatorModel(SimplificationModel):
             return
         before, after = self._pre_train_dsc(training_data)
         logger.info('Pre-training loss values: {} ... {}'.format(before, after))
-        if sum(before) <= sum(after):
+        if before <= after:
             logger.warn('Pre-training was useless ...')
         while continue_callback(*callback_args):
             if not self.active:
@@ -616,8 +627,9 @@ class DiscriminatorModel(SimplificationModel):
         if steps is not None:
             logger.warn('- max steps is ' + str(max_i))
         error = 1.
+        tc = False
         for batch_index, batch in data.batches(batch_size=self._training_params.batch_size, **kwargs):
-            err_values, tail = self._step(*batch, forward_only=forward_only)
+            err_values, tail = self._step(*batch, forward_only=forward_only, tc=float(tc))
             error *= err_values
             if self._has_summary and not batch_index % log_every:
                 if forward_only:
@@ -635,4 +647,6 @@ class DiscriminatorModel(SimplificationModel):
                 self.save()
             if batch_index >= max_i:
                 break
+            if batch_index % 50:
+                tc = not tc
         logger.info('Epoch finished')
