@@ -532,7 +532,7 @@ class DiscriminatorModel(SimplificationModel):
         dsc_vars = tf.global_variables(scope=dsc_scope.name)
         self._dsc_update = dsc_optimizer.minimize(err_dsc, var_list=dsc_vars)
         self._enc_update = ae_optimizer.minimize(err_g)
-        enc_scopes = [embedding_scope, encoder_scope.name, 'encoding', 'reduction']
+        enc_scopes = [embedding_scope.name, encoder_scope.name, 'encoding', 'reduction']
         enc_vars = []
         for scope_name in enc_scopes:
             enc_vars.extend(tf.global_variables(scope=scope_name))
