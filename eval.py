@@ -50,8 +50,8 @@ with model_type(training_params=training_params,
                 print('end!')
                 break
             values = [np.array(v) for v in model.predict(*batch, **kwargs)]
-            predictions_normal[r].append(values[0])
-            predictions_simple[r].append(values[1])
+            predictions_normal[r].append(values[0].argmax(axis=2))
+            predictions_simple[r].append(values[1].argmax(axis=2))
             z_normal[r].append(values[2])
             z_simple[r].append(values[3])
             if run_again:
@@ -62,8 +62,8 @@ with model_type(training_params=training_params,
 
 if not os.path.exists(args.out_dir):
     os.mkdir(args.out_dir)
-np.save(os.path.join(args.out_dir, 'normal_logits.npy'), np.array(predictions_normal))
-np.save(os.path.join(args.out_dir, 'simple_logits.npy'), np.array(predictions_simple))
+np.save(os.path.join(args.out_dir, 'normal_logits.npy'), np.array(predictions_normal).astype(np.int16))
+np.save(os.path.join(args.out_dir, 'simple_logits.npy'), np.array(predictions_simple).astype(np.int16))
 np.save(os.path.join(args.out_dir, 'z_normal.npy'), np.array(z_normal))
 np.save(os.path.join(args.out_dir, 'z_simple.npy'), np.array(z_simple))
 np.save(os.path.join(args.out_dir, 'd_outs.npy'), np.array(d_vals))
