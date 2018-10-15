@@ -6,7 +6,6 @@ import tensorflow as tf
 from tensorflow.contrib.layers import conv2d, fully_connected, max_pool2d, softmax, stack
 from tensorflow.contrib.rnn import MultiRNNCell, LSTMCell, LSTMStateTuple
 from tensorflow.contrib.seq2seq import sequence_loss
-import time
 tf.reset_default_graph()
 
 logging.basicConfig(level=logging.INFO)
@@ -89,7 +88,7 @@ class TrainingParameters(object):
                          'PATH', str(self.path)))
 
 
-class SequenceModel(object):
+class SimplificationModel(object):
     def __init__(self,
                  model_params,
                  training_params,
@@ -192,7 +191,7 @@ class SequenceModel(object):
         self._session.__exit__(exc_type, exc_val, exc_tb)
 
 
-class AE(SequenceModel):
+class AE(SimplificationModel):
     def _build(self):
         with tf.variable_scope('embedding') as scope:
             embedded_n = tf.contrib.layers.embed_sequence(self.x_normal,
@@ -278,11 +277,6 @@ class AE(SequenceModel):
         err = tf.add(err_z, err_r, name='err')
         self._losses = [err, err_r, err_z]
         params = tf.trainable_variables()
-        #optimizer = tf.train.GradientDescentOptimizer(learning_rate=self._training_params.learning_rate)
-        #gradients = tf.gradients(err, params)
-        #clipped_gradients, _ = tf.clip_by_global_norm(gradients, clip_norm=self._training_params.clip_norm)
-        #self._update = self._training_params.optimizer.apply_gradients(grads_and_vars=zip(clipped_gradients, params),
-        #                                                         global_step=self.global_step)
         self._update = tf.train.AdamOptimizer(learning_rate=self._training_params.learning_rate).minimize(err)
 
     def _step(self, x_n, x_s=None, weights_x_n=None, weights_x_s=None, forward_only=False):
@@ -414,34 +408,132 @@ class SimpleAE(AE):
         err_r = tf.add(err_r_normal, err_r_simple, name='rec_err')
         err = tf.add(err_z, err_r, name='err')
         self._losses = [err, err_r, err_z]
-        params = tf.trainable_variables()
-        #optimizer = tf.train.GradientDescentOptimizer(learning_rate=self._training_params.learning_rate)
-        #gradients = tf.gradients(err, params)
-        #clipped_gradients, _ = tf.clip_by_global_norm(gradients, clip_norm=self._training_params.clip_norm)
-        #self._update = self._training_params.optimizer.apply_gradients(grads_and_vars=zip(clipped_gradients, params),
-        #                                                         global_step=self.global_step)
         self._update = tf.train.AdamOptimizer(learning_rate=self._training_params.learning_rate).minimize(err)
 
 
-class VAE(SequenceModel):
+class DiscriminatorModel(SimplificationModel):
+    def __init__(self, *args, **kwargs):
+        self._dsc_update = None
+        self._enc_update = None
+        super().__init__(*args, **kwargs)
+
     def _build(self):
-        pass
+        with tf.variable_scope('embedding') as scope:
+            embedded_n = tf.contrib.layers.embed_sequence(self.x_normal,
+                                                          vocab_size=self._model_params.v,
+                                                          embed_dim=self._model_params.emb,
+                                                          scope=scope)
+            embedded_s = tf.contrib.layers.embed_sequence(self.x_simple,
+                                                          reuse=True,
+                                                          scope=scope)
+        with tf.variable_scope('encoder') as encoder_scope:
+            encoder = MultiRNNCell([LSTMCell(self._model_params.h), LSTMCell(self._model_params.h)])
+        with tf.variable_scope('encode/n') as encoding_scope_n:
+            z_normal_arr = []
+            z, state = encoder(embedded_n[:, 0], self._initial_encoder_state)
+            z_normal_arr.append(z)
+        with tf.variable_scope(encoding_scope_n, reuse=True):
+            for i in range(1, self._model_params.n):
+                z, state = encoder(embedded_n[:, i], state)
+                z_normal_arr.append(z)
+        with tf.variable_scope('encode/s') as encoding_scope_s:
+            z_simple_arr = []
+            z, state = encoder(embedded_s[:, 0], self._initial_encoder_state)
+            z_simple_arr.append(z)
+        with tf.variable_scope(encoding_scope_s, reuse=True):
+            for i in range(1, self._model_params.n):
+                z, state = encoder(embedded_s[:, i], state)
+                z_simple_arr.append(z)
+        z_n = tf.transpose(tf.convert_to_tensor(z_normal_arr))
+        z_s = tf.transpose(tf.convert_to_tensor(z_simple_arr))
+        with tf.variable_scope('reduction/0') as scope:
+            z_normal = conv2d(z_n, self._model_params.n // 2, (32,))
+            z_simple = conv2d(z_s, self._model_params.n // 2, (32,), reuse=tf.AUTO_REUSE, scope=scope)
+        with tf.variable_scope('reduction/1') as scope:
+            z_normal = conv2d(z_normal, self._model_params.n // 4, (32,))
+            z_simple = conv2d(z_simple, self._model_params.n // 4, (32,), reuse=tf.AUTO_REUSE, scope=scope)
+        with tf.variable_scope('reduction/pool'):
+            z_normal = max_pool2d(tf.transpose(z_normal[None], (0, 1, 3, 2)),
+                                  kernel_size=(1, self._model_params.n // 4),
+                                  stride=1)
+            z_simple = max_pool2d(tf.transpose(z_simple[None], (0, 1, 3, 2)),
+                                  kernel_size=(1, self._model_params.n // 4),
+                                  stride=1)
+        with tf.variable_scope('reduction/reshape'):
+            z_normal = tf.reshape(z_normal, (self._training_params.batch_size, self._model_params.h))
+            z_simple = tf.reshape(z_simple, (self._training_params.batch_size, self._model_params.h))
+
+        # decode
+        with tf.variable_scope('decode_n') as scope:
+            decoder_n = MultiRNNCell([
+                LSTMCell(self._model_params.h),
+                LSTMCell(self._model_params.h),
+                LSTMCell(self._model_params.v)
+            ])
+            state = self._initial_decoder_state
+            logits_normal = []
+            logits, state = decoder_n(z_normal, state)
+            logits_normal.append(logits)
+        with tf.variable_scope(scope, reuse=True):
+            for _ in range(1, self._model_params.n):
+                logits, state = decoder_n(z_normal, state)
+                logits_normal.append(logits)
+            decoder_loss_normal = tf.reduce_sum(sequence_loss(tf.transpose(tf.convert_to_tensor(logits_normal),
+                                                                           (1, 0, 2)),
+                                                self.x_normal,
+                                                self.w_normal))
+        with tf.variable_scope('decode_s') as scope:
+            decoder_s = MultiRNNCell([
+                LSTMCell(self._model_params.h),
+                LSTMCell(self._model_params.h),
+                LSTMCell(self._model_params.v)
+            ])
+            state = self._initial_decoder_state
+            logits_simple = []
+            logits, state = decoder_s(z_simple, state)
+            logits_simple.append(logits)
+        with tf.variable_scope(scope, reuse=True):
+            for _ in range(1, self._model_params.n):
+                logits, state = decoder_s(z_simple, state)
+                logits_simple.append(logits)
+            decoder_loss_simple = tf.reduce_sum(sequence_loss(tf.transpose(tf.convert_to_tensor(logits_simple),
+                                                                           (1, 0, 2)),
+                                                self.x_simple,
+                                                self.w_simple))
+        # losses
+        ae_loss = tf.add(decoder_loss_normal, decoder_loss_simple)
+        dsc_dims = [self._model_params.h // (2 ** e) for e in range(1, int(np.log2(self._model_params.h // 2)))] + [1]
+        with tf.variable_scope('discriminator') as dsc_scope:
+            # the discriminator's output probability is chosen as probability that the input was a normal, i. e. complex
+            # expression. Thus, the probability can also be interpreted as complexity score with higher values
+            # expressing a higher level of complexity
+            from_normal = tf.sigmoid(stack(z_normal,
+                                           layer=fully_connected,
+                                           stack_args=dsc_dims))
+            from_simple = tf.sigmoid(stack(z_simple,
+                                           layer=fully_connected,
+                                           stack_args=dsc_dims,
+                                           reuse=tf.AUTO_REUSE))
+            err_dsc = tf.squared_difference(1., from_normal) + tf.squared_difference(0., from_simple)
+        err_g = tf.negative(tf.log(err_dsc))
+        # optimization
+        ## optimizers
+        dsc_optimizer = tf.train.AdamOptimizer(learning_rate=self._training_params.learning_rate)
+        ae_optimizer = tf.train.AdamOptimizer(learning_rate=self._training_params.learning_rate)  # shared optimizer for alignment of z's and auto-encoding (potential pitfall, but separate not better)
+        ## updates
+        dsc_vars = tf.global_variables(scope=dsc_scope.name)
+        self._dsc_update = dsc_optimizer.minimize(err_dsc, var_list=dsc_vars)
+        self._enc_update = ae_optimizer.minimize(err_g)
+        enc_scopes = [encoder_scope.name, 'encoding', 'reduction']
+        enc_vars = []
+        for scope_name in enc_scopes:
+            enc_vars.extend(tf.global_variables(scope=scope_name))
+        self._enc_update = ae_optimizer.minimize(err_g, var_list=enc_vars)
+        ae_vars = [var for var in tf.global_variables() if var not in set(dsc_vars)]
+        self._update = ae_optimizer.minimize(ae_optimizer, var_list=ae_vars)
 
     def _step(self, x, y=None, weights_x=None, weights_y=None):
         pass
 
-
-class SingleDiscriminatorModel(SequenceModel):
-    def _build(self):
-        pass
-
-    def _step(self, x, y=None, weights_x=None, weights_y=None):
-        pass
-
-
-class DualDiscriminatorModel(SequenceModel):
-    def _build(self):
-        pass
-
-    def _step(self, x, y=None, weights_x=None, weights_y=None):
+    def loop(self, *args, **kwargs):
         pass
