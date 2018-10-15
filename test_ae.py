@@ -30,7 +30,7 @@ training_params = TrainingParameters(os.path.join(TEST_DIR, 'test'))
 test = 'TRAIN'
 try:
     logger.info('Training test ...')
-    with SimpleAE(model_params, training_params, overwrite=True) as model:
+    with AE(model_params, training_params, overwrite=True) as model:
         model.loop(training_data=data['train'],
                    validation_data=data['valid'],
                    steps=2000,

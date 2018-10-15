@@ -145,7 +145,7 @@ class SimplificationModel(object):
         self._train_writer = tf.summary.FileWriter(logdir=os.path.join(self._training_params.path, 'train'))
         self._valid_writer = tf.summary.FileWriter(logdir=os.path.join(self._training_params.path, 'valid'))
         for loss in self._losses:
-            tf.summary.scalar(loss.name, loss)
+            tf.summary.scalar(loss.name, tf.reduce_mean(loss))
         self._summary = tf.summary.merge_all()
 
     def _step(self, x, y=None, weights_x=None, weights_y=None):
@@ -300,7 +300,7 @@ class AE(SimplificationModel):
             self._session.run([self._count_epoch])
             logger.info('Starting epoch ' + str(self._epoch.eval(session=self._session)))
             self._consume(data=training_data, **kwargs)
-            self._consume(data=validation_data, forward_only=True, select=2000, **kwargs)
+            self._consume(data=validation_data, forward_only=True, select=1000, **kwargs)
             if self._auto_save:
                 self.save()
         logger.info('Finished training after {} epochs'.format(self._epoch.eval(session=self._session)))
@@ -334,8 +334,10 @@ class AE(SimplificationModel):
                 self._log_step += 1
             if batch_index and not batch_index % report_every:
                 logger.info(
-                    'Step {}: current {} error is {}, accumulated error is {}'\
-                        .format(batch_index, 'VALID' if forward_only else 'TRAIN', error ** (1 / report_every), error)
+                    'Step {}: current {} error is {}'\
+                        .format(batch_index,
+                                'VALID' if forward_only else 'TRAIN',
+                                [np.mean(err_val) for err_val in error ** (1 / report_every)])
                 )
                 error = 1.
             if self._auto_save and batch_index and not batch_index % save_every:
@@ -604,7 +606,7 @@ class DiscriminatorModel(SimplificationModel):
             self._session.run([self._count_epoch])
             logger.info('Starting epoch ' + str(self._epoch.eval(session=self._session)))
             self._consume(data=training_data, **kwargs)
-            self._consume(data=validation_data, forward_only=True, select=200, **kwargs)
+            self._consume(data=validation_data, forward_only=True, select=1000, **kwargs)
             if self._auto_save:
                 self.save()
         logger.info('Finished training after {} epochs'.format(self._epoch.eval(session=self._session)))
