@@ -417,15 +417,22 @@ class DiscriminatorModel(SimplificationModel):
         self._enc_update = None
         super().__init__(*args, **kwargs)
 
+    def _log(self):
+        self._train_writer = tf.summary.FileWriter(logdir=os.path.join(self._training_params.path, 'train'))
+        self._valid_writer = tf.summary.FileWriter(logdir=os.path.join(self._training_params.path, 'valid'))
+        for loss in self._losses:
+            tf.summary.scalar(loss.name, loss)
+        self._summary = tf.summary.merge_all()
+
     def _build(self):
-        with tf.variable_scope('embedding') as scope:
+        with tf.variable_scope('embedding') as embedding_scope:
             embedded_n = tf.contrib.layers.embed_sequence(self.x_normal,
                                                           vocab_size=self._model_params.v,
                                                           embed_dim=self._model_params.emb,
-                                                          scope=scope)
+                                                          scope=embedding_scope)
             embedded_s = tf.contrib.layers.embed_sequence(self.x_simple,
                                                           reuse=True,
-                                                          scope=scope)
+                                                          scope=embedding_scope)
         with tf.variable_scope('encoder') as encoder_scope:
             encoder = MultiRNNCell([LSTMCell(self._model_params.h), LSTMCell(self._model_params.h)])
         with tf.variable_scope('encode/n') as encoding_scope_n:
@@ -501,7 +508,7 @@ class DiscriminatorModel(SimplificationModel):
                                                 self.x_simple,
                                                 self.w_simple))
         # losses
-        ae_loss = tf.add(decoder_loss_normal, decoder_loss_simple)
+        ae_loss = tf.add(decoder_loss_normal, decoder_loss_simple, name='seq2seq_loss')
         dsc_dims = [self._model_params.h // (2 ** e) for e in range(1, int(np.log2(self._model_params.h // 2)))] + [1]
         with tf.variable_scope('discriminator') as dsc_scope:
             # the discriminator's output probability is chosen as probability that the input was a normal, i. e. complex
@@ -514,7 +521,8 @@ class DiscriminatorModel(SimplificationModel):
                                            layer=fully_connected,
                                            stack_args=dsc_dims,
                                            reuse=tf.AUTO_REUSE))
-            err_dsc = tf.squared_difference(1., from_normal) + tf.squared_difference(0., from_simple)
+            err_dsc = tf.add(tf.squared_difference(1., from_normal), tf.squared_difference(0., from_simple),
+                             name='discriminator_loss')
         err_g = tf.negative(tf.log(err_dsc))
         # optimization
         ## optimizers
@@ -524,16 +532,107 @@ class DiscriminatorModel(SimplificationModel):
         dsc_vars = tf.global_variables(scope=dsc_scope.name)
         self._dsc_update = dsc_optimizer.minimize(err_dsc, var_list=dsc_vars)
         self._enc_update = ae_optimizer.minimize(err_g)
-        enc_scopes = [encoder_scope.name, 'encoding', 'reduction']
+        enc_scopes = [embedding_scope, encoder_scope.name, 'encoding', 'reduction']
         enc_vars = []
         for scope_name in enc_scopes:
             enc_vars.extend(tf.global_variables(scope=scope_name))
         self._enc_update = ae_optimizer.minimize(err_g, var_list=enc_vars)
         ae_vars = [var for var in tf.global_variables() if var not in set(dsc_vars)]
         self._update = ae_optimizer.minimize(ae_optimizer, var_list=ae_vars)
+        self._losses = [ae_loss, err_dsc]
 
-    def _step(self, x, y=None, weights_x=None, weights_y=None):
-        pass
+    def _step(self, x_n, x_s=None, weights_x_n=None, weights_x_s=None, forward_only=False):
+        if not self.active:
+            raise ValueError
+        variables = self._losses + ([] if forward_only else [self._update])
+        if self._has_summary:
+            variables.append(self._summary)
+        values = self._session.run(variables,
+                                   feed_dict={'normal:0': x_n,
+                                              'simple:0': x_s,
+                                              'nweights:0': weights_x_n,
+                                              'sweights:0': weights_x_s})
+        return np.array(values[:len(self._losses)]).flatten(), values[-1]
 
-    def loop(self, *args, **kwargs):
-        pass
+    def _pre_train_dsc(self, data, examples=1000):
+        # first pre-train the ae a little, to make sure, encoding of z is a little more sophisticated than just
+        # max-values or 0-vectors
+        for _, batch in data.batches(select=50):
+            x_n, x_s, weights_x_n, weights_x_s = batch
+            self._session.run([self._update],
+                              feed_dict={'normal:0': x_n,
+                                         'simple:0': x_s,
+                                         'nweights:0': weights_x_n,
+                                         'sweights:0': weights_x_s})
+        n = examples // self._training_params.batch_size
+        loss_values = []
+        loss = self._losses[1]
+        for _, batch in data.batches(select=n):
+            x_n, x_s, weights_x_n, weights_x_s = batch
+            value, _ = self._session.run([loss, self._dsc_update],
+                                         feed_dict={'normal:0': x_n,
+                                                    'simple:0': x_s,
+                                                    'nweights:0': weights_x_n,
+                                                    'sweights:0': weights_x_s})
+            loss_values.append(value)
+        return loss_values[:3], loss_values[-3:]
+
+    def loop(self, training_data, validation_data, continue_callback=lambda: True, callback_args=(), **kwargs):
+        warn_message = 'Model inactive, cancelling loop ...'
+        if not self.active:
+            logger.warn(warn_message)
+            return
+        before, after = self._pre_train_dsc(training_data)
+        logger.info('Pre-training loss values: {} ... {}'.format(before, after))
+        if sum(before) <= sum(after):
+            logger.warn('Pre-training was useless ...')
+        while continue_callback(*callback_args):
+            if not self.active:
+                logger.warn(warn_message)
+                return
+            self._session.run([self._count_epoch])
+            logger.info('Starting epoch ' + str(self._epoch.eval(session=self._session)))
+            self._consume(data=training_data, **kwargs)
+            self._consume(data=validation_data, forward_only=True, select=200, **kwargs)
+            if self._auto_save:
+                self.save()
+        logger.info('Finished training after {} epochs'.format(self._epoch.eval(session=self._session)))
+
+    def _consume(self,
+                 data,
+                 forward_only=False,
+                 steps=None,
+                 report_every=1000,
+                 log_every=100,
+                 save_every=sys.maxsize,
+                 **kwargs):
+        max_i = sys.maxsize if steps is None else steps
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug('Starting data consumption ...')
+        if forward_only:
+            logger.info('- validating / testing')
+        else:
+            logger.info('- training')
+        if steps is not None:
+            logger.warn('- max steps is ' + str(max_i))
+        error = 1.
+        for batch_index, batch in data.batches(batch_size=self._training_params.batch_size, **kwargs):
+            err_values, tail = self._step(*batch, forward_only=forward_only)
+            error *= err_values
+            if self._has_summary and not batch_index % log_every:
+                if forward_only:
+                    self._valid_writer.add_summary(tail, self._log_step)
+                else:
+                    self._train_writer.add_summary(tail, self._log_step)
+                self._log_step += 1
+            if batch_index and not batch_index % report_every:
+                logger.info(
+                    'Step {}: current {} error is {}, accumulated error is {}'\
+                        .format(batch_index, 'VALID' if forward_only else 'TRAIN', error ** (1 / report_every), error)
+                )
+                error = 1.
+            if self._auto_save and batch_index and not batch_index % save_every:
+                self.save()
+            if batch_index >= max_i:
+                break
+        logger.info('Epoch finished')
