@@ -305,10 +305,10 @@ class AE(SimplificationModel):
 
     def predict(self, x_n, x_s=None, weights_x_n=None, weights_x_s=None):
         values = self._session.run([self._normal_logits, self._simple_logits, self._z_n, self._z_s],
-                                   feed_dict={'normal:0': x_n,
-                                              'simple:0': x_s,
-                                              'nweights:0': weights_x_n,
-                                              'sweights:0': weights_x_s})
+                                   feed_dict={'normal:0': x_s,  # the model has to do transfer, so we have to lie
+                                              'simple:0': x_n,
+                                              'nweights:0': weights_x_s,
+                                              'sweights:0': weights_x_n})
         return values
 
     def loop(self, training_data, validation_data, continue_callback=lambda: True, callback_args=(), **kwargs):
@@ -593,10 +593,10 @@ class DiscriminatorModel(SimplificationModel):
 
     def predict(self, x_n, x_s=None, weights_x_n=None, weights_x_s=None, tc=0.):
         values = self._session.run([self._normal_logits, self._simple_logits, self._z_n, self._z_s, self._d_out],
-                                   feed_dict={'normal:0': x_n,
-                                              'simple:0': x_s,
-                                              'nweights:0': weights_x_n,
-                                              'sweights:0': weights_x_s,
+                                   feed_dict={'normal:0': x_s,  # transfer
+                                              'simple:0': x_n,
+                                              'nweights:0': weights_x_s,
+                                              'sweights:0': weights_x_n,
                                               'train_crit:0': tc})
         return values
 
