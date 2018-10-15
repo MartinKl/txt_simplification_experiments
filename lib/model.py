@@ -305,7 +305,7 @@ class AE(SimplificationModel):
 
     def predict(self, x_n, x_s=None, weights_x_n=None, weights_x_s=None):
         forward_only = True
-        values = self._session.run([self._normal_logits, self._simple_logits, self._zn, self._zs],
+        values = self._session.run([self._normal_logits, self._simple_logits, self._z_n, self._z_s],
                                    feed_dict={'normal:0': x_n,
                                               'simple:0': x_s,
                                               'nweights:0': weights_x_n,
