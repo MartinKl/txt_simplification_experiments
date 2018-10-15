@@ -304,7 +304,6 @@ class AE(SimplificationModel):
         return np.array(values[:len(self._losses)]).flatten(), values[-1]
 
     def predict(self, x_n, x_s=None, weights_x_n=None, weights_x_s=None):
-        forward_only = True
         values = self._session.run([self._normal_logits, self._simple_logits, self._z_n, self._z_s],
                                    feed_dict={'normal:0': x_n,
                                               'simple:0': x_s,
@@ -437,6 +436,7 @@ class DiscriminatorModel(SimplificationModel):
     def __init__(self, *args, **kwargs):
         self._dsc_update = None
         self._enc_update = None
+        self._d_out = None
         super().__init__(*args, **kwargs)
 
     def _log(self):
@@ -492,6 +492,9 @@ class DiscriminatorModel(SimplificationModel):
             z_normal = tf.reshape(z_normal, (self._training_params.batch_size, self._model_params.h))
             z_simple = tf.reshape(z_simple, (self._training_params.batch_size, self._model_params.h))
 
+        self._z_n = z_normal
+        self._z_s = z_simple
+
         # decode
         with tf.variable_scope('decode_n') as scope:
             decoder_n = MultiRNNCell([
@@ -529,6 +532,9 @@ class DiscriminatorModel(SimplificationModel):
                                                                            (1, 0, 2)),
                                                                self.x_simple,
                                                                self.w_simple)
+        self._normal_logits = logits_normal
+        self._simple_logits = logits_simple
+
         # losses
         ae_loss = tf.add(decoder_loss_normal, decoder_loss_simple, name='seq2seq_loss')
         dsc_dims = [self._model_params.h // (2 ** e) for e in range(0, int(np.log2(self._model_params.h // 2)))] + [1]
@@ -542,6 +548,7 @@ class DiscriminatorModel(SimplificationModel):
             for i, dim in enumerate(dsc_dims):
                 o = tf.layers.dense(o, dim, name='dsc_dense_{}'.format(i))
             from_normal = training_criterion * tf.sigmoid(o)
+            self._d_out = from_normal
             o = z_simple
             for i, dim in enumerate(dsc_dims):
                 o = tf.layers.dense(o, dim, reuse=True, name='dsc_dense_{}'.format(i))
@@ -583,6 +590,15 @@ class DiscriminatorModel(SimplificationModel):
                                               'sweights:0': weights_x_s,
                                               'train_crit:0': tc})
         return np.array([values[0], values[1].mean()]), values[-1]
+
+    def predict(self, x_n, x_s=None, weights_x_n=None, weights_x_s=None, tc=0.):
+        values = self._session.run([self._normal_logits, self._simple_logits, self._z_n, self._z_s, self._d_out],
+                                   feed_dict={'normal:0': x_n,
+                                              'simple:0': x_s,
+                                              'nweights:0': weights_x_n,
+                                              'sweights:0': weights_x_s,
+                                              'train_crit:0': tc})
+        return values
 
     def _pre_train_dsc(self, data, examples=10000):
         # first pre-train the ae a little, to make sure, encoding of z is a little more sophisticated than just

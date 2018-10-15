@@ -1,6 +1,6 @@
 from argparse import ArgumentParser
 from lib.data import DataCollection
-from lib.model import AE, SimpleAE, ModelParameters, TrainingParameters
+from lib.model import AE, DiscriminatorModel, ModelParameters, TrainingParameters
 import numpy as np
 import os
 
@@ -30,8 +30,9 @@ training_params = TrainingParameters(os.path.abspath(args.directory),
                                      learning_rate=args.lr)
 print(training_params)
 data = DataCollection(normal, simple, normal_w, simple_w)
-with AE(training_params=training_params, model_params=model_params, load=True, auto_save=False) as model:
+with DiscriminatorModel(training_params=training_params, model_params=model_params, load=True, auto_save=False) as model:
     for batch_index, batch in data['test'].batches(batch_size=training_params.batch_size):
         values = model.predict(*batch)
         print(values)
+        print(*[v.shape for v in values])
         break
