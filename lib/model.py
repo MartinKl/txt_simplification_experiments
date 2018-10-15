@@ -280,8 +280,8 @@ class AE(SimplificationModel):
                                                        self.w_simple)
         self._normal_logits = logits_normal
         self._simple_logits = logits_simple
-        self._zs = z_simple
-        self._zs = z_normal
+        self._z_s = z_simple
+        self._z_n = z_normal
         # losses
         err_z = tf.squared_difference(z_simple, z_normal, name='repr_error')
         err_r = tf.add(err_r_normal, err_r_simple, name='rec_err')
