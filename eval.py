@@ -11,7 +11,6 @@ parser.add_argument('--bs', type=int, default=32, help='batch size')
 parser.add_argument('--report', type=int, default=100)
 parser.add_argument('--log', type=int, default=50)
 parser.add_argument('--epochs', type=int, default=200)
-parser.add_argument('--load', action='store_true', help='Load model before continuing?')
 args = parser.parse_args()
 
 normal = np.load('bin_data/uniwiki_minimal/normal.npy')
@@ -31,8 +30,8 @@ training_params = TrainingParameters(os.path.abspath(args.directory),
                                      learning_rate=args.lr)
 print(training_params)
 data = DataCollection(normal, simple, normal_w, simple_w)
-with AE(training_params=training_params, model_params=model_params, load=args.load, auto_save=False) as model:
-    for batch_index, batch in data.batches(batch_size=training_params.batch_size):
+with AE(training_params=training_params, model_params=model_params, load=True, auto_save=False) as model:
+    for batch_index, batch in data['test'].batches(batch_size=training_params.batch_size):
         values = model.predict(*batch)
         print(values)
         break
