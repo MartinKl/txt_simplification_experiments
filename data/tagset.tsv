@@ -1,0 +1,124 @@
+. 	sentence (. ; ? *)	1
+( 	left paren	1
+) 	right paren	1
+* 	not, n't	1
+-- 	dash	1
+, 	comma	1
+: 	colon	1
+ABL 	pre-qualifier (quite, rather)	1
+ABN 	pre-quantifier (half, all)	1
+ABX 	pre-quantifier (both)	1
+AP 	post-determiner (many, several, next)	1
+AT 	article (a, the, no)	1
+BE 	be	1
+BED 	were	1
+BEDZ 	was	1
+BEG 	being	1
+BEM 	am	1
+BEN 	been	1
+BER 	are, art	1
+BEZ 	is	1
+CC 	coordinating conjunction (and, or)	1
+CD 	cardinal numeral (one, two, 2, etc.)	1
+CS 	subordinating conjunction (if, although)	1
+DO 	do	1
+DOD 	did	1
+DOZ 	does	1
+DT 	singular determiner/quantifier (this, that)	1
+DTI 	singular or plural determiner/quantifier (some, any)	1
+DTS 	plural determiner (these, those)	1
+DTX 	determiner/double conjunction (either)	1
+EX 	existential there	1
+FW 	foreign word (hyphenated before regular tag)	0
+HV 	have	1
+HVD 	had (past tense)	1
+HVG 	having	1
+HVN 	had (past participle)	1
+IN 	preposition	1
+JJ 	adjective	0
+JJR 	comparative adjective	0
+JJS 	semantically superlative adjective (chief, top)	0
+JJT 	morphologically superlative adjective (biggest)	0
+MD 	modal auxiliary (can, should, will)	1
+NC 	cited word (hyphenated after regular tag)	0
+NN 	singular or mass noun	0
+NN$ 	possessive singular noun	0
+NNS 	plural noun	0
+NNS$ 	possessive plural noun	0
+NP 	proper noun or part of name phrase	0
+NNP	dummy	0
+NP$ 	possessive proper noun	0
+NPS 	plural proper noun	0
+NPS$ 	possessive plural proper noun	0
+NR 	adverbial noun (home, today, west)	1
+OD 	ordinal numeral (first, 2nd)	1
+PN 	nominal pronoun (everybody, nothing)	1
+PN$ 	possessive nominal pronoun	1
+PP$ 	possessive personal pronoun (my, our)	1
+PP$$ 	second (nominal) possessive pronoun (mine, ours)	1
+PPL 	singular reflexive/intensive personal pronoun (myself)	1
+PPLS 	plural reflexive/intensive personal pronoun (ourselves)	1
+PPO 	objective personal pronoun (me, him, it, them)	1
+PPS 	3rd. singular nominative pronoun (he, she, it, one)	1
+PPSS 	other nominative personal pronoun (I, we, they, you)	1
+PRP 	Personal pronoun	1
+PRP$ 	Possessive pronoun	1
+QL 	qualifier (very, fairly)	1
+QLP 	post-qualifier (enough, indeed)	1
+RB 	adverb	0
+RBR 	comparative adverb	0
+RBT 	superlative adverb	0
+RN 	nominal adverb (here, then, indoors)	1
+RP 	adverb/particle (about, off, up)	1
+TO 	infinitive marker to	1
+UH 	interjection, exclamation	1
+VB 	verb, base form	0
+VBD 	verb, past tense	0
+VBG 	verb, present participle/gerund	0
+VBN 	verb, past participle	1
+VBP 	verb, non 3rd person, singular, present	0
+VBZ 	verb, 3rd. singular present	0
+WDT 	wh- determiner (what, which)	1
+WP$ 	possessive wh- pronoun (whose)	1
+WPO 	objective wh- pronoun (whom, which, that)	1
+WPS 	nominative wh- pronoun (who, which, that)	1
+WQL 	wh- qualifier (how)	1
+WRB 	wh- adverb (how, where, when)	1
+UNK	unknown	0
+-	from here ptb	0
+CC	Coordinating conjunction	1
+CD	Cardinal number	0
+DT	Determiner	1
+EX	Existential there	1
+FW	Foreign word	0
+IN	Preposition or subordinating conjunction	1
+JJ	Adjective	0
+JJR	Adjective, comparative	0
+JJS	Adjective, superlative	0
+LS	List item marker	1
+MD	Modal	1
+NN	Noun, singular or mass	0
+NNS	Noun, plural	0
+NNP	Proper noun, singular	0
+NNPS	Proper noun, plural	0
+PDT	Predeterminer	1
+POS	Possessive ending	1
+PRP	Personal pronoun	1
+PRP$	Possessive pronoun	1
+RB	Adverb	0
+RBR	Adverb, comparative	0
+RBS	Adverb, superlative	0
+RP	Particle	1
+SYM	Symbol	0
+TO	to	1
+UH	Interjection	1
+VB	Verb, base form	0
+VBD	Verb, past tense	0
+VBG	Verb, gerund or present participle	0
+VBN	Verb, past participle	0
+VBP	Verb, non-3rd person singular present	0
+VBZ	Verb, 3rd person singular present	0
+WDT	Wh-determiner	1
+WP	Wh-pronoun	1
+WP$	Possessive wh-pronoun	1
+WRB	Wh-adverb	1
