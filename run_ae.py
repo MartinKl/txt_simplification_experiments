@@ -3,6 +3,8 @@ from lib.data import DataCollection
 from lib.model import AE, SimpleAE, ModelParameters, TrainingParameters
 import numpy as np
 import os
+import pickle
+import tensorflow as tf
 
 parser = ArgumentParser()
 parser.add_argument('directory', type=str, help='training and log dir')
@@ -26,10 +28,11 @@ valid_set = (train_set[1] + 1, int(.9 * normal.shape[0]))
 model_params = ModelParameters(sequence_length=normal.shape[1],
                                vocabulary_size=max(normal.max(), simple.max()) + 1,
                                embedding_dim=16,
-                               hidden_dim=64)
+                               hidden_dim=48)
 training_params = TrainingParameters(os.path.abspath(args.directory),
                                      batch_size=args.bs,
-                                     learning_rate=args.lr)
+                                     learning_rate=args.lr,
+                                     optimizer=tf.train.GradientDescentOptimizer)
 print(training_params)
 data = DataCollection(normal, simple, normal_w, simple_w)
 model_type = SimpleAE if args.simple else AE
@@ -41,3 +44,7 @@ with model_type(training_params=training_params, model_params=model_params, load
                log_every=args.log,
                continue_callback=lambda m: m.age < args.epochs,
                callback_args=[model])
+with open(os.path.join(training_params.path, 'train_params.bin'), 'wb') as ft, \
+    open(os.path.join(training_params.path, 'model_params.bin'), 'wb') as fm:
+    pickle.dump(training_params, ft)
+    pickle.dump(model_params, fm)

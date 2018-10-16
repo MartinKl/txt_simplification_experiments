@@ -59,7 +59,7 @@ class TrainingParameters(object):
         self._bs = batch_size
         self._lr = learning_rate
         self._clip_norm = clip_norm
-        self._opt = optimizer(learning_rate=learning_rate, **opt_kwargs)
+        self._opt = optimizer
 
     @property
     def batch_size(self):
@@ -288,7 +288,7 @@ class AE(SimplificationModel):
         err = tf.add(err_z, err_r, name='err')
         self._losses = [err, err_r, err_z]
         params = tf.trainable_variables()
-        self._update = tf.train.AdamOptimizer(learning_rate=self._training_params.learning_rate).minimize(err)
+        self._update = self._training_params.optimizer(learning_rate=self._training_params.learning_rate).minimize(err)
 
     def _step(self, x_n, x_s=None, weights_x_n=None, weights_x_s=None, forward_only=False):
         if not self.active:
@@ -429,7 +429,7 @@ class SimpleAE(AE):
         err_r = tf.add(err_r_normal, err_r_simple, name='rec_err')
         err = tf.add(err_z, err_r, name='err')
         self._losses = [err, err_r, err_z]
-        self._update = tf.train.AdamOptimizer(learning_rate=self._training_params.learning_rate).minimize(err)
+        self._update = self._training_params.optimizer(learning_rate=self._training_params.learning_rate).minimize(err)
 
 
 class DiscriminatorModel(SimplificationModel):
@@ -559,8 +559,8 @@ class DiscriminatorModel(SimplificationModel):
         err_g = tf.negative(tf.log(.1 * err_dsc))
         # optimization
         ## optimizers
-        dsc_optimizer = tf.train.AdamOptimizer(learning_rate=self._training_params.learning_rate)
-        ae_optimizer = tf.train.AdamOptimizer(learning_rate=self._training_params.learning_rate)  # shared optimizer for alignment of z's and auto-encoding (potential pitfall, but separate not better)
+        dsc_optimizer = self._training_params.optimizer(learning_rate=self._training_params.learning_rate)
+        ae_optimizer = self._training_params.optimizer(learning_rate=self._training_params.learning_rate)  # shared optimizer for alignment of z's and auto-encoding (potential pitfall, but separate not better)
         ## updates
 
         def var_filter(collection):
