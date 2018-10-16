@@ -40,7 +40,6 @@ print(z_normal.flatten())
 
 output_file('heat_map_dsc.html')
 sq_diff = ((z_normal - z_simple) ** 2).flatten()
-sq_diff /= sq_diff.max()
 y = np.array([list(range(64))] * 4288).flatten()
 x = np.array([[i] * 64 for i in range(4288)]).flatten()
 show(HeatMap({'values': sq_diff, 'z[i]': x, 'example': y},
@@ -48,16 +47,16 @@ show(HeatMap({'values': sq_diff, 'z[i]': x, 'example': y},
              y='example',
              values='values',
              stat=None,
-             title='normed squared difference of z along the test set (implicit model)'))
+             title='squared difference of z along the test set (implicit model)'))
 output_file('normal_z_heat_map_dsc.html')
-show(HeatMap({'values': z_normal, 'z[i]': x, 'example': y},
+show(HeatMap({'values': z_normal.flatten(), 'z[i]': x, 'example': y},
              x='z[i]',
              y='example',
              values='values',
              stat=None,
              title='normal z-values along the test set (implicit model)'))
 output_file('simple_z_heat_map_dsc.html')
-show(HeatMap({'values': z_simple, 'z[i]': x, 'example': y},
+show(HeatMap({'values': z_simple.flatten(), 'z[i]': x, 'example': y},
              x='z[i]',
              y='example',
              values='values',
@@ -96,22 +95,21 @@ z_simple = np.load(os.path.join(AE_DIR, 'z_' + SIMPLE_NAME)).reshape(134 * 32, 6
 
 output_file('heat_map_ae.html')
 sq_diff = ((z_normal - z_simple) ** 2).flatten()
-sq_diff /= sq_diff.max()
 show(HeatMap({'values': sq_diff, 'z[i]': x, 'example': y},
              x='z[i]',
              y='example',
              values='values',
              stat=None,
-             title='normed squared difference of z along the test set (explicit model)'))
+             title='squared difference of z along the test set (explicit model)'))
 output_file('normal_z_heat_map_ae.html')
-show(HeatMap({'values': z_normal, 'z[i]': x, 'example': y},
+show(HeatMap({'values': z_normal.flatten(), 'z[i]': x, 'example': y},
              x='z[i]',
              y='example',
              values='values',
              stat=None,
              title='normal z-values along the test set (explicit model)'))
 output_file('simple_z_heat_map_ae.html')
-show(HeatMap({'values': z_simple, 'z[i]': x, 'example': y},
+show(HeatMap({'values': z_simple.flatten(), 'z[i]': x, 'example': y},
              x='z[i]',
              y='example',
              values='values',
